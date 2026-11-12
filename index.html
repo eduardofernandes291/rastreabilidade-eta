@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Rastreabilidade de Equipamentos</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#f1f5f9; --card:#fff; --ink:#0f172a; --ink2:#475569; --ink3:#94a3b8; --line:#e2e8f0;
+  --head:#0f172a; --acc:#1d4ed8; --acc2:#dbeafe; --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+  --r:12px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+a{color:var(--acc);text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit}
+.hide{display:none!important}
+/* topo */
+header.top{position:sticky;top:0;z-index:20;background:var(--head);color:#fff;display:flex;align-items:center;gap:12px;padding:10px 16px}
+header.top .marca{font-weight:700;letter-spacing:.2px;white-space:nowrap}
+header.top .marca small{display:block;font-weight:400;color:#94a3b8;font-size:12px}
+header.top nav{display:flex;gap:4px;margin-left:auto}
+header.top nav a{color:#cbd5e1;padding:8px 12px;border-radius:8px;font-size:14px}
+header.top nav a.on,header.top nav a:hover{background:#1e293b;color:#fff}
+.papel{font-size:11px;padding:2px 8px;border-radius:99px;background:#334155;color:#e2e8f0;margin-left:6px}
+nav.baixo{display:none}
+@media (max-width:760px){
+  header.top nav{display:none}
+  nav.baixo{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:20;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  nav.baixo a{flex:1;text-align:center;padding:9px 2px 7px;font-size:11px;color:var(--ink2)}
+  nav.baixo a b{display:block;font-size:18px;line-height:1.1}
+  nav.baixo a.on{color:var(--acc)}
+  main{padding-bottom:80px!important}
+}
+main{max-width:1180px;margin:0 auto;padding:18px 16px 40px}
+h1{font-size:22px;margin:4px 0 2px}
+h2{font-size:16px;margin:22px 0 10px}
+.sub{color:var(--ink2);font-size:13px}
+.trilha{font-size:13px;color:var(--ink2);margin-bottom:6px}
+.trilha a{color:var(--ink2)} .trilha a:hover{color:var(--acc)}
+.linha{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.esp{flex:1}
+/* botões */
+.bt{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:#fff;padding:9px 14px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14px;white-space:nowrap}
+.bt:hover{border-color:#cbd5e1;background:#f8fafc}
+.bt.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.bt.pri:hover{background:#1e40af}
+.bt.per{color:var(--bad);border-color:#fecaca}
+.bt.peq{padding:6px 10px;font-size:13px}
+.bt[disabled]{opacity:.55;cursor:wait}
+/* cards e kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.kpi .n{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+.kpi .n small{font-size:14px;color:var(--ink3);font-weight:500}
+.kpi .l{font-size:12px;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px}
+.kpi.alerta .n{color:var(--bad)} .kpi.aviso .n{color:var(--warn)}
+.barra{height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin-top:8px}
+.barra i{display:block;height:100%;background:var(--ok);border-radius:99px}
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.bloco{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:block;color:inherit}
+a.bloco:hover{border-color:var(--acc);box-shadow:0 1px 0 var(--acc)}
+.bloco .t{font-weight:700;font-size:18px}
+.bloco .m{font-size:12px;color:var(--ink2);margin-top:2px}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tg{font-size:11px;padding:2px 8px;border-radius:99px;background:#f1f5f9;color:var(--ink2);font-weight:600;white-space:nowrap;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;letter-spacing:0}
+.tg.bad{background:#fee2e2;color:#b91c1c} .tg.warn{background:#fef3c7;color:#92400e} .tg.ok{background:#dcfce7;color:#166534} .tg.info{background:var(--acc2);color:#1e40af}
+/* cards de posição */
+.posicoes{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.pos{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+.pos.incompleta{border-left:4px solid #cbd5e1}
+.pos.completa{border-left:4px solid var(--ok)}
+.pos.alerta{border-left:4px solid var(--bad)}
+.pos .cab{padding:12px 14px 10px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:flex-start}
+.item{flex:none;width:30px;height:30px;border-radius:50%;background:var(--head);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
+.pos .nome{font-weight:700}
+.pos .loc{font:12px var(--mono);color:var(--ink2)}
+.peca{display:grid;grid-template-columns:78px minmax(0,1fr);gap:2px 10px;padding:9px 14px;border-bottom:1px dashed var(--line);align-items:center;cursor:pointer}
+.peca .lin{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;min-width:0}
+.peca .lin .st{white-space:normal}
+.peca:hover{background:#f8fafc}
+.peca.vazia{cursor:default;background:repeating-linear-gradient(45deg,#fff,#fff 8px,#f8fafc 8px,#f8fafc 16px)}
+.peca .tp{font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px}
+.peca .sn{font:600 16px var(--mono);letter-spacing:.5px;white-space:nowrap}
+.peca .det{grid-column:2;font-size:12px;color:var(--ink2)}
+.peca .falta{color:var(--ink3);font-size:13px;font-style:italic}
+.pos .rod{padding:10px 14px;margin-top:auto;display:flex;gap:8px;align-items:center}
+.st{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:#f1f5f9;white-space:nowrap}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c,#64748b)}
+.nivel{font-size:12px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.6px;margin:18px 0 8px;display:flex;align-items:center;gap:8px}
+.nivel::after{content:"";flex:1;height:1px;background:var(--line)}
+/* listas */
+.lista{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.lista .li{display:flex;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line);color:inherit}
+.lista .li:last-child{border-bottom:0}
+.lista a.li:hover{background:#f8fafc}
+.mono{font-family:var(--mono)}
+.vazio{padding:28px;text-align:center;color:var(--ink2)}
+/* dossiê */
+.ficha{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.ficha div{background:#fff;padding:10px 14px;box-shadow:1px 1px 0 var(--line)}
+.ficha dt{font-size:11px;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px}
+.ficha dd{margin:2px 0 0;font-weight:600;word-break:break-word}
+.tempo{border-left:2px solid var(--line);margin-left:8px;padding-left:18px}
+.ev{position:relative;padding:0 0 16px}
+.ev::before{content:"";position:absolute;left:-25px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--c,#64748b);border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+.ev .q{font-size:12px;color:var(--ink2)}
+.ev .o{font-weight:600}
+.ev .d{font-size:13px;color:var(--ink2);white-space:pre-wrap}
+/* formulários */
+.campo{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.campo label{font-size:13px;font-weight:600;color:var(--ink2)}
+.campo input,.campo select,.campo textarea{border:1px solid #cbd5e1;border-radius:9px;padding:10px 12px;background:#fff;width:100%}
+.campo input:focus,.campo select:focus,.campo textarea:focus{outline:2px solid var(--acc2);border-color:var(--acc)}
+.campo .dica{font-size:12px;color:var(--ink3)}
+input.sninput{font:600 18px var(--mono);letter-spacing:1px}
+.dupla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;margin:4px 0 10px;cursor:pointer}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:10px}
+.seg label{padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink2)}
+.seg input{display:none}
+.seg input:checked+span{color:#fff}
+.seg label:has(input:checked){background:var(--acc);color:#fff}
+fieldset.pc{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px 4px;margin:0 0 12px}
+fieldset.pc legend{font-weight:700;padding:0 6px}
+.busca{display:flex;gap:8px}
+.busca input{flex:1;border:1px solid #cbd5e1;border-radius:10px;padding:11px 14px;font-size:16px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.chip{border:1px solid var(--line);background:#fff;border-radius:99px;padding:5px 12px;font-size:13px;cursor:pointer}
+.chip.on{background:var(--head);color:#fff;border-color:var(--head)}
+/* modal e avisos */
+.fundo{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:4vh 12px}
+.modal{background:#fff;border-radius:16px;width:100%;max-width:560px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:92vh;display:flex;flex-direction:column}
+.modal .mc{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+.modal .mc h3{margin:0;font-size:17px;flex:1}
+.modal .mb{padding:16px 18px;overflow:auto;flex:1}
+.modal .mr{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;background:#fff;border-radius:0 0 16px 16px}
+.x{border:0;background:none;font-size:22px;cursor:pointer;color:var(--ink2);line-height:1}
+.erro{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:10px 12px;border-radius:10px;font-size:14px;margin-bottom:12px;white-space:pre-wrap}
+.info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:10px 12px;border-radius:10px;font-size:13px;margin-bottom:12px}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--head);color:#fff;padding:11px 18px;border-radius:12px;font-size:14px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:92vw}
+.carregando{padding:40px;text-align:center;color:var(--ink2)}
+/* login */
+.login{min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(160deg,#0f172a,#1e3a8a)}
+.login form{background:#fff;border-radius:18px;padding:26px 24px;width:100%;max-width:380px}
+.login h1{margin:0 0 4px}
+table.t{width:100%;border-collapse:collapse;font-size:14px}
+table.t th,table.t td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="hide"></div>
+
+<script>
+/* =====================================================================
+   CONFIGURAÇÃO — projeto Supabase
+   A chave "publishable" é pública por natureza: a proteção dos dados é
+   feita pelo login + regras de segurança (RLS) do banco.
+   ===================================================================== */
+const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
+const VERSAO = 'v0.2 · Etapa 2';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ---------- estado ---------- */
+const S = { sessao:null, perfil:null, ref:null, posicoes:null, equip:null };
+const TIPOS_ORDEM = ['VALVULA','ATUADOR','REDUTOR','SOPRADOR','OUTRO'];
+const FAB_PADRAO = { VALVULA:'Interativa', ATUADOR:'Coester', REDUTOR:'Coester' };
+const ROTULO_CAMPO = {
+  torque_nm:'Torque (N·m)', rotacao_rpm:'Rotação (rpm)', tensao_v:'Tensão (V)', corrente_a:'Corrente (A)',
+  potencia_kw:'Potência (kW)', frequencia_hz:'Frequência (Hz)', grau_protecao_ip:'Grau de proteção (IP)',
+  tipo_comando:'Tipo de comando', relacao_reducao:'Relação de redução', torque_saida_nm:'Torque de saída (N·m)',
+  tipo_redutor:'Tipo de redutor', tipo_valvula:'Tipo de válvula', tamanho_pol:'Tamanho (pol)', pressao_pn:'Pressão (PN)',
+  material_corpo:'Material do corpo', material_disco:'Material do disco', material_vedacao:'Material da vedação',
+  vazao_m3h:'Vazão (m³/h)', pressao_mbar:'Pressão (mbar)', diametro_dn:'Diâmetro (DN)'
+};
+const SITUACAO_SN = { PENDENTE:'Pendente (não conferido)', ILEGIVEL:'Placa ilegível', SEM_PLACA:'Sem placa (caiu/ausente)' };
+const EVENTO = {
+  INSTALACAO:['Instalação','#0ea5e9'], RETIRADA:['Retirada','#78716c'], OCORRENCIA:['Ocorrência','#dc2626'],
+  SUBSTITUIDO_POR:['Substituído','#57534e'], SUBSTITUIU:['Substituição','#16a34a']
+};
+const DEFEITO = ['COM_DEFEITO','AGUARDANDO_MANUTENCAO'];
+
+/* ---------- utilidades ---------- */
+const $ = (s, el=document) => el.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pode = () => ['admin','editor'].includes(S.perfil?.papel);
+const admin = () => S.perfil?.papel === 'admin';
+const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
+const fmtD = v => v ? new Date(v.length === 10 ? v + 'T12:00:00' : v).toLocaleDateString('pt-BR') : '—';
+const fmtDH = v => v ? new Date(v).toLocaleString('pt-BR', {dateStyle:'short', timeStyle:'short'}) : '—';
+const dataParaTs = d => (!d || d === hoje()) ? new Date().toISOString() : d + 'T12:00:00-03:00';
+const tipoNome = c => S.ref.tipos.find(t => t.codigo === c)?.nome || c;
+const stInfo = c => S.ref.status.find(s => s.codigo === c) || { nome:c, cor:'#64748b' };
+const pill = c => { const s = stInfo(c); return `<span class="st" style="--c:${esc(s.cor)}">${esc(s.nome)}</span>`; };
+const nomeUsuario = id => S.ref.perfis.find(p => p.user_id === id)?.nome || (id ? 'usuário' : 'sistema');
+
+function msgErro(e) {
+  const m = (e && (e.message || e.error_description || e.msg)) || String(e);
+  if (/ux_equipamentos_sn/.test(m)) return 'Já existe uma peça deste tipo e fabricante com este SN.\nConfira a placa. Se for a mesma peça, procure-a pela Busca.';
+  if (/Invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
+  if (/row-level security|permission denied/i.test(m)) return 'Você não tem permissão para esta operação.';
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sem conexão com o servidor. Verifique a internet e tente de novo.';
+  if (/Password should be/i.test(m)) return 'A senha deve ter pelo menos 8 caracteres.';
+  return m;
+}
+function toast(t, ms=3500) {
+  const el = $('#toast'); el.textContent = t; el.classList.remove('hide');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.add('hide'), ms);
+}
+async function q(promise) { const { data, error } = await promise; if (error) throw error; return data; }
+async function buscarTodos(fn) {
+  let todos = [], de = 0; const passo = 1000;
+  for (;;) { const lote = await q(fn().range(de, de + passo - 1)); todos = todos.concat(lote); if (lote.length < passo) break; de += passo; }
+  return todos;
+}
+
+/* ---------- carga de dados ---------- */
+async function carregarRef() {
+  const [tipos, status, fabricantes, obras, perfis] = await Promise.all([
+    q(sb.from('tipos_equipamento').select('*')),
+    q(sb.from('status_equipamento').select('*').order('ordem')),
+    q(sb.from('fabricantes').select('*').order('nome')),
+    q(sb.from('obras').select('*').order('codigo')),
+    q(sb.from('perfis').select('*').order('nome')),
+  ]);
+  tipos.sort((a,b) => TIPOS_ORDEM.indexOf(a.codigo) - TIPOS_ORDEM.indexOf(b.codigo));
+  S.ref = { tipos, status, fabricantes, obras, perfis };
+  S.perfil = perfis.find(p => p.user_id === S.sessao.user.id) || { nome: S.sessao.user.email, papel:'leitor' };
+}
+async function carregarPosicoes(forcar) {
+  if (S.posicoes && !forcar) return S.posicoes;
+  S.posicoes = await buscarTodos(() => sb.from('vw_posicoes').select('*')
+    .order('galeria', { ascending:true }).order('filtro_numero', { ascending:true }).order('item', { ascending:true }));
+  return S.posicoes;
+}
+async function carregarEquip(forcar) {
+  if (S.equip && !forcar) return S.equip;
+  S.equip = await buscarTodos(() => sb.from('vw_equipamentos')
+    .select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,situacao_sn,fabricante,status_codigo,posicao_id,tag_local,galeria,filtro,posicao_descricao,ocorrencias_abertas')
+    .order('tag_rastreio', { ascending:true }));
+  return S.equip;
+}
+function invalidar() { S.posicoes = null; S.equip = null; }
+
+/* ---------- cálculos ---------- */
+function resumoPos(lista) {
+  let prev = 0, inst = 0, defeito = 0, semSn = 0;
+  for (const p of lista) {
+    prev += p.tipos_previstos.length; inst += p.tipos_previstos.length - p.tipos_pendentes.length;
+    for (const k of ['valvula','atuador','redutor']) if (DEFEITO.includes(p[k + '_status'])) defeito++;
+    semSn += Number(p.pecas_sem_sn || 0);
+  }
+  return { prev, inst, defeito, semSn, pct: prev ? Math.round(inst * 100 / prev) : 0 };
+}
+const barra = pct => `<div class="barra"><i style="width:${pct}%"></i></div>`;
+
+/* =====================================================================
+   TELAS
+   ===================================================================== */
+function moldura(ativo, conteudo) {
+  const obra = S.ref.obras[0];
+  const links = [['#/','Painel','▦','painel'],['#/g/A','Filtros','◫','filtros'],['#/busca','Buscar','⌕','busca'],['#/estoque','Estoque','▤','estoque'],['#/conta','Conta','◉','conta']];
+  return `
+  <header class="top">
+    <div class="marca">Rastreabilidade de Equipamentos<small>${esc(obra?.nome || '')}</small></div>
+    <nav>${links.map(l => `<a href="${l[0]}" class="${ativo === l[3] ? 'on' : ''}">${l[1]}</a>`).join('')}</nav>
+    <span class="papel" title="${esc(S.perfil.nome)}">${esc(S.perfil.papel)}</span>
+  </header>
+  <main>${conteudo}</main>
+  <nav class="baixo">${links.map(l => `<a href="${l[0]}" class="${ativo === l[3] ? 'on' : ''}"><b>${l[2]}</b>${l[1]}</a>`).join('')}</nav>`;
+}
+
+/* ---------- login ---------- */
+function telaLogin(erro) {
+  $('#app').innerHTML = `
+  <div class="login"><form id="flogin" autocomplete="on">
+    <h1>Rastreabilidade</h1>
+    <div class="sub" style="margin-bottom:18px">Gestão de válvulas, atuadores e redutores</div>
+    ${erro ? `<div class="erro">${esc(erro)}</div>` : ''}
+    <div class="campo"><label for="lemail">E-mail</label><input id="lemail" name="email" type="email" required autocomplete="username"></div>
+    <div class="campo"><label for="lsenha">Senha</label><input id="lsenha" name="senha" type="password" required autocomplete="current-password"></div>
+    <button class="bt pri" style="width:100%" type="submit">Entrar</button>
+    <div class="sub" style="margin-top:14px;font-size:12px">Acesso restrito. Peça seu login ao administrador.</div>
+  </form></div>`;
+  $('#flogin').onsubmit = async ev => {
+    ev.preventDefault();
+    const b = ev.target.querySelector('button'); b.disabled = true; b.textContent = 'Entrando…';
+    const f = new FormData(ev.target);
+    const { data, error } = await sb.auth.signInWithPassword({ email: f.get('email').trim(), password: f.get('senha') });
+    if (error) return telaLogin(msgErro(error));
+    S.sessao = data.session; await iniciar();
+  };
+}
+
+/* ---------- painel ---------- */
+async function telaPainel() {
+  const [pos, eq] = await Promise.all([carregarPosicoes(), carregarEquip()]);
+  const r = resumoPos(pos);
+  const conta = (tipo) => {
+    const prev = pos.filter(p => p.tipos_previstos.includes(tipo)).length;
+    const inst = pos.filter(p => p.tipos_previstos.includes(tipo) && !p.tipos_pendentes.includes(tipo)).length;
+    return { prev, inst };
+  };
+  const v = conta('VALVULA'), a = conta('ATUADOR'), rd = conta('REDUTOR');
+  const defeito = eq.filter(e => DEFEITO.includes(e.status_codigo));
+  const semSn = eq.filter(e => e.sn_pendente);
+  const estoque = eq.filter(e => !e.posicao_id && e.status_codigo !== 'BAIXADO');
+  const galerias = [...new Set(pos.filter(p => p.galeria).map(p => p.galeria))];
+  const kpi = (n, de, l, cls='') => `<div class="kpi ${cls}"><div class="n">${n}${de != null ? ` <small>/ ${de}</small>` : ''}</div><div class="l">${l}</div>${de ? barra(Math.round(n*100/de)) : ''}</div>`;
+  return moldura('painel', `
+    <h1>Painel</h1><div class="sub">${pos.length} posições · ${r.inst} de ${r.prev} peças instaladas (${r.pct}%)</div>
+    <h2>Instalação</h2>
+    <div class="kpis">
+      ${kpi(v.inst, v.prev, 'Válvulas')}${kpi(a.inst, a.prev, 'Atuadores')}${kpi(rd.inst, rd.prev, 'Redutores')}
+    </div>
+    <h2>Atenção</h2>
+    <div class="kpis">
+      ${kpi(defeito.length, null, 'Com defeito / aguardando manutenção', defeito.length ? 'alerta' : '')}
+      ${kpi(semSn.length, null, 'Peças com SN pendente', semSn.length ? 'aviso' : '')}
+      ${kpi(estoque.length, null, 'Peças fora de posição (estoque)')}
+    </div>
+    ${defeito.length ? `<h2>Peças com defeito</h2><div class="lista">${defeito.slice(0, 15).map(linhaEquip).join('')}</div>` : ''}
+    <h2>Galerias</h2>
+    <div class="grade">${galerias.map(g => {
+      const rg = resumoPos(pos.filter(p => p.galeria === g));
+      return `<a class="bloco" href="#/g/${esc(g)}"><div class="t">Galeria ${esc(g)}</div>
+        <div class="m">${rg.inst} de ${rg.prev} peças · ${rg.pct}%</div>${barra(rg.pct)}
+        <div class="tags">${rg.defeito ? `<span class="tg bad">${rg.defeito} com defeito</span>` : ''}${rg.semSn ? `<span class="tg warn">${rg.semSn} sem SN</span>` : ''}</div></a>`;
+    }).join('')}</div>`);
+}
+
+function linhaEquip(e) {
+  const local = e.tag_local ? `${esc(e.tag_local)} · ${esc(e.posicao_descricao || '')}` : 'Fora de posição';
+  return `<a class="li" href="#/e/${e.id}">
+    <div style="min-width:0;flex:1">
+      <div><b class="mono">${esc(e.tag_rastreio)}</b> · ${esc(tipoNome(e.tipo_codigo))} · ${esc(e.fabricante)}</div>
+      <div class="sub">SN ${e.numero_serie ? `<b class="mono">${esc(e.numero_serie)}</b>` : '<span class="tg warn">pendente</span>'} · ${local}</div>
+    </div>${pill(e.status_codigo)}</a>`;
+}
+
+/* ---------- galeria (12 filtros) ---------- */
+async function telaGaleria(g) {
+  const pos = await carregarPosicoes();
+  const galerias = [...new Set(pos.filter(p => p.galeria).map(p => p.galeria))];
+  const daGaleria = pos.filter(p => p.galeria === g);
+  const filtros = [...new Set(daGaleria.map(p => p.filtro_numero))].sort((a,b) => a - b);
+  const rg = resumoPos(daGaleria);
+  return moldura('filtros', `
+    <div class="chips">${galerias.map(x => `<a class="chip ${x === g ? 'on' : ''}" href="#/g/${esc(x)}">Galeria ${esc(x)}</a>`).join('')}</div>
+    <h1>Galeria ${esc(g)}</h1><div class="sub">${filtros.length} filtros · ${rg.inst} de ${rg.prev} peças instaladas (${rg.pct}%)</div>
+    <h2>Filtros</h2>
+    <div class="grade">${filtros.map(n => {
+      const pf = daGaleria.filter(p => p.filtro_numero === n); const rf = resumoPos(pf);
+      return `<a class="bloco" href="#/f/${esc(g)}/${n}"><div class="t">${esc(pf[0].filtro)}</div>
+        <div class="m">${rf.inst} de ${rf.prev} peças</div>${barra(rf.pct)}
+        <div class="tags">${rf.pct === 100 ? '<span class="tg ok">completo</span>' : ''}${rf.defeito ? `<span class="tg bad">${rf.defeito} defeito</span>` : ''}${rf.semSn ? `<span class="tg warn">${rf.semSn} sem SN</span>` : ''}</div></a>`;
+    }).join('') || '<div class="vazio">Nenhum filtro nesta galeria.</div>'}</div>`);
+}
+
+/* ---------- filtro (8 posições) ---------- */
+async function telaFiltro(g, n) {
+  const pos = await carregarPosicoes();
+  const pf = pos.filter(p => p.galeria === g && p.filtro_numero === Number(n));
+  if (!pf.length) return moldura('filtros', '<div class="vazio">Filtro não encontrado.</div>');
+  const rf = resumoPos(pf);
+  const nums = [...new Set(pos.filter(p => p.galeria === g).map(p => p.filtro_numero))].sort((a,b) => a - b);
+  const i = nums.indexOf(Number(n));
+  const ant = nums[i - 1], prox = nums[i + 1];
+  const grupo = nivel => pf.filter(p => (p.nivel || 'INFERIOR') === nivel);
+  const bloco = (nivel, rot) => grupo(nivel).length ? `<div class="nivel">${rot}</div><div class="posicoes">${grupo(nivel).map(cardPosicao).join('')}</div>` : '';
+  return moldura('filtros', `
+    <div class="trilha"><a href="#/">Painel</a> › <a href="#/g/${esc(g)}">Galeria ${esc(g)}</a> › ${esc(pf[0].filtro)}</div>
+    <div class="linha"><h1>Galeria ${esc(g)} · ${esc(pf[0].filtro)}</h1><span class="esp"></span>
+      ${ant ? `<a class="bt peq" href="#/f/${esc(g)}/${ant}">‹ F${String(ant).padStart(2,'0')}</a>` : ''}
+      ${prox ? `<a class="bt peq" href="#/f/${esc(g)}/${prox}">F${String(prox).padStart(2,'0')} ›</a>` : ''}</div>
+    <div class="sub">${rf.inst} de ${rf.prev} peças instaladas (${rf.pct}%)${rf.semSn ? ` · <span class="tg warn">${rf.semSn} sem SN</span>` : ''}</div>
+    ${barra(rf.pct)}
+    ${bloco('INFERIOR', 'Galeria inferior')}${bloco('SUPERIOR', 'Galeria superior')}`);
+}
+
+function cardPosicao(p) {
+  const temDefeito = ['valvula','atuador','redutor'].some(k => DEFEITO.includes(p[k + '_status']));
+  const cls = temDefeito ? 'alerta' : (p.tipos_pendentes.length ? 'incompleta' : 'completa');
+  const pecas = p.tipos_previstos.slice().sort((a,b) => TIPOS_ORDEM.indexOf(a) - TIPOS_ORDEM.indexOf(b)).map(t => {
+    const k = t.toLowerCase();
+    if (!p[k + '_id']) return `<div class="peca vazia"><span class="tp">${esc(tipoNome(t))}</span><span class="falta">não instalado</span></div>`;
+    const sn = p[k + '_sn'];
+    const dadosExtra = [p[k + '_fabricante'], p[k + '_tag']].filter(Boolean).map(esc).join(' · ');
+    return `<div class="peca" data-ir="#/e/${p[k + '_id']}" role="link" tabindex="0">
+      <span class="tp">${esc(tipoNome(t))}</span>
+      <span class="lin"><span class="sn">${sn ? esc(sn) : '<span class="tg warn">SN pendente</span>'}</span>${pill(p[k + '_status'])}</span>
+      <span class="tp"></span><span class="det">${dadosExtra}${p[k + '_modelo'] ? ' · ' + esc(p[k + '_modelo']) : ''}</span></div>`;
+  }).join('');
+  const faltam = p.tipos_pendentes.map(tipoNome).join(', ');
+  return `<div class="pos ${cls}">
+    <div class="cab"><span class="item">${esc(p.item ?? '•')}</span>
+      <div style="flex:1;min-width:0"><div class="nome">${esc(p.descricao)}</div>
+      <div class="loc">${esc(p.tag_local)}${p.tag_consorcio ? ' · Consórcio: ' + esc(p.tag_consorcio) : ''}</div></div>
+      ${p.ocorrencias_abertas > 0 ? `<span class="tg bad">${p.ocorrencias_abertas} ocorr.</span>` : ''}</div>
+    ${pecas}
+    <div class="rod">
+      ${p.tipos_pendentes.length ? `<span class="sub">Falta: ${esc(faltam)}</span>` : '<span class="tg ok">Conjunto completo</span>'}
+      <span class="esp"></span>
+      ${pode() && p.tipos_pendentes.length ? `<button class="bt pri peq" data-registrar="${p.posicao_id}">+ Registrar peças</button>` : ''}
+    </div></div>`;
+}
+
+/* ---------- registrar peças de uma posição ---------- */
+async function abrirRegistrar(posId) {
+  const p = S.posicoes.find(x => x.posicao_id === posId);
+  const tipos = p.tipos_pendentes.slice().sort((a,b) => TIPOS_ORDEM.indexOf(a) - TIPOS_ORDEM.indexOf(b));
+  const eq = await carregarEquip();
+  const estoque = t => eq.filter(e => e.tipo_codigo === t && !e.posicao_id && e.status_codigo !== 'BAIXADO');
+  const fabOpts = t => S.ref.fabricantes.map(f => `<option value="${f.id}" ${f.nome === FAB_PADRAO[t] ? 'selected' : ''}>${esc(f.nome)}</option>`).join('');
+  const blocoTipo = t => {
+    const tp = S.ref.tipos.find(x => x.codigo === t); const est = estoque(t);
+    return `<fieldset class="pc" data-tipo="${t}"><legend>${esc(tp.nome)}</legend>
+      ${est.length ? `<div class="seg"><label><input type="radio" name="${t}_modo" value="nova" checked><span>Nova peça</span></label><label><input type="radio" name="${t}_modo" value="estoque"><span>Do estoque (${est.length})</span></label></div>` : `<input type="hidden" name="${t}_modo" value="nova">`}
+      <div data-painel="nova">
+        <div class="dupla">
+          <div class="campo"><label>Fabricante</label><select name="${t}_fab">${fabOpts(t)}</select></div>
+          <div class="campo"><label>SN da placa</label><input class="sninput" name="${t}_sn" autocomplete="off" ${tp.formato_sn === '^[0-9]{5}$' ? 'inputmode="numeric" maxlength="5"' : ''} placeholder="${esc(tp.formato_sn_descricao ? tp.formato_sn_descricao.replace(/^.*ex\.:\s*/,'').replace(/\)$/,'') : '')}"></div>
+        </div>
+        ${tp.formato_sn_descricao ? `<div class="campo" style="margin-top:-8px"><span class="dica">Formato: ${esc(tp.formato_sn_descricao)}</span></div>` : ''}
+        <label class="chk"><input type="checkbox" name="${t}_semsn"> Sem SN (placa caiu, ilegível ou não conferida)</label>
+        <div data-semsn class="hide">
+          <div class="campo"><label>Situação</label><select name="${t}_situacao">${Object.entries(SITUACAO_SN).map(([k,v]) => `<option value="${k}" ${k === 'SEM_PLACA' ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+          <div class="campo"><label>Motivo / observação (obrigatório)</label><input name="${t}_motivo" placeholder="Ex.: placa caiu durante a montagem"></div>
+        </div>
+        ${t === 'VALVULA' ? `<div class="dupla"><div class="campo"><label>Tipo de válvula</label><input name="${t}_tipo_valvula" value="Borboleta"></div><div class="campo"><label>Tamanho (pol)</label><input name="${t}_tamanho_pol" inputmode="decimal" placeholder="28"></div></div>` : ''}
+      </div>
+      ${est.length ? `<div data-painel="estoque" class="hide"><div class="campo"><label>Peça em estoque</label><select name="${t}_estoque"><option value="">Selecione…</option>${est.map(e => `<option value="${e.id}">${esc(e.tag_rastreio)} · SN ${esc(e.numero_serie || 'pendente')} · ${esc(e.fabricante)} · ${esc(stInfo(e.status_codigo).nome)}</option>`).join('')}</select></div></div>` : ''}
+    </fieldset>`;
+  };
+  const corpo = `
+    <div class="sub" style="margin-bottom:12px"><b class="mono">${esc(p.tag_local)}</b> · ${esc(p.descricao)}</div>
+    <div class="info">Preencha só as peças que você está registrando agora. As que ficarem em branco continuam pendentes.</div>
+    <div data-erro></div>
+    ${tipos.map(blocoTipo).join('')}
+    <div class="dupla">
+      <div class="campo"><label>Data da instalação</label><input type="date" name="data" value="${hoje()}" max="${hoje()}" required></div>
+      <div class="campo"><label>Situação</label><select name="status">
+        <option value="INSTALADO_NAO_COMISSIONADO">Instalado — não comissionado</option><option value="EM_OPERACAO">Em operação</option></select></div>
+    </div>
+    <div class="campo"><label>Responsável</label><input name="responsavel" value="${esc(S.perfil.nome)}" required></div>`;
+  modal('Registrar peças', corpo, 'Salvar', async (form, mostrarErro) => {
+    const f = new FormData(form); const itens = [];
+    for (const t of tipos) {
+      const tp = S.ref.tipos.find(x => x.codigo === t);
+      if (f.get(`${t}_modo`) === 'estoque') {
+        if (f.get(`${t}_estoque`)) itens.push({ equipamento_id: f.get(`${t}_estoque`) });
+        continue;
+      }
+      const sn = (f.get(`${t}_sn`) || '').replace(/\s+/g, '').toUpperCase();
+      const semSn = f.get(`${t}_semsn`) === 'on';
+      if (!sn && !semSn) continue;
+      const item = { tipo_codigo: t, fabricante_id: f.get(`${t}_fab`), dados_placa: {} };
+      if (semSn) {
+        const motivo = (f.get(`${t}_motivo`) || '').trim();
+        if (!motivo) return mostrarErro(`${tp.nome}: informe o motivo da falta do SN.`);
+        Object.assign(item, { situacao_sn: f.get(`${t}_situacao`), sn_observacao: motivo });
+      } else {
+        if (tp.formato_sn && !(new RegExp(tp.formato_sn)).test(sn)) return mostrarErro(`${tp.nome}: SN "${sn}" fora do padrão (${tp.formato_sn_descricao}).`);
+        item.numero_serie = sn;
+      }
+      if (t === 'VALVULA') {
+        if (f.get('VALVULA_tipo_valvula')) item.dados_placa.tipo_valvula = f.get('VALVULA_tipo_valvula').trim();
+        if (f.get('VALVULA_tamanho_pol')) item.dados_placa.tamanho_pol = f.get('VALVULA_tamanho_pol').trim();
+      }
+      itens.push(item);
+    }
+    if (!itens.length) return mostrarErro('Nenhuma peça preenchida. Informe o SN, marque "Sem SN" ou escolha do estoque.');
+    const res = await q(sb.rpc('instalar_conjunto', {
+      p_posicao_id: posId, p_itens: itens, p_responsavel: f.get('responsavel').trim(),
+      p_data: dataParaTs(f.get('data')), p_status: f.get('status')
+    }));
+    invalidar(); await carregarPosicoes(true);
+    toast(`${res.length} peça(s) registrada(s): ${res.map(r => r.tag_rastreio).join(', ')}`);
+    return true;
+  }, el => {
+    el.querySelectorAll('fieldset.pc').forEach(fs => {
+      fs.addEventListener('change', ev => {
+        if (ev.target.name?.endsWith('_modo')) fs.querySelectorAll('[data-painel]').forEach(d => d.classList.toggle('hide', d.dataset.painel !== ev.target.value));
+        if (ev.target.name?.endsWith('_semsn')) {
+          fs.querySelector('[data-semsn]').classList.toggle('hide', !ev.target.checked);
+          const sn = fs.querySelector('.sninput'); sn.disabled = ev.target.checked; if (ev.target.checked) sn.value = '';
+        }
+      });
+    });
+  });
+}
+
+/* ---------- dossiê do equipamento ---------- */
+async function telaEquip(id) {
+  const [e, hist, aud] = await Promise.all([
+    q(sb.from('vw_equipamentos').select('*').eq('id', id).maybeSingle()),
+    q(sb.from('vw_historico').select('*').eq('equipamento_id', id).order('data', { ascending:false })),
+    q(sb.from('auditoria').select('em,usuario_id,acao,alterados,antes,depois').eq('tabela', 'equipamentos').eq('registro_id', id).order('em', { ascending:false }).limit(50)),
+  ]);
+  if (!e) return moldura('busca', '<div class="vazio">Equipamento não encontrado.</div>');
+  equipAtual = e;
+  const tp = S.ref.tipos.find(t => t.codigo === e.tipo_codigo);
+  const placa = Object.entries(e.dados_placa || {}).filter(([,v]) => v !== '' && v != null);
+  const loc = e.posicao_id
+    ? `<a href="#/f/${esc(e.galeria)}/${Number(String(e.filtro || '').replace(/\D/g,''))}">${esc(e.tag_local)}</a> · ${esc(e.posicao_descricao)}`
+    : 'Fora de posição';
+  const campo = (l, v) => `<div><dt>${l}</dt><dd>${v}</dd></div>`;
+  const alteracoes = aud.filter(a => a.acao === 'UPDATE');
+  return moldura('busca', `
+    <div class="trilha"><a href="#/">Painel</a>${e.galeria ? ` › <a href="#/g/${esc(e.galeria)}">Galeria ${esc(e.galeria)}</a> › <a href="#/f/${esc(e.galeria)}/${Number(String(e.filtro).replace(/\D/g,''))}">${esc(e.filtro)}</a>` : ' › <a href="#/estoque">Estoque</a>'} › ${esc(e.tag_rastreio)}</div>
+    <div class="linha"><h1 class="mono">${esc(e.tag_rastreio)}</h1>${pill(e.status_codigo)}${e.demonstracao ? '<span class="tg info">demonstração</span>' : ''}</div>
+    <div class="sub">${esc(tp?.nome)} · ${esc(e.fabricante)}${e.modelo ? ' · ' + esc(e.modelo) : ''}</div>
+    ${pode() ? `<div class="linha" style="margin:14px 0">
+      ${e.sn_pendente ? `<button class="bt pri peq" data-acao="sn">Informar SN</button>` : `<button class="bt peq" data-acao="sn">Corrigir SN</button>`}
+      <button class="bt peq" data-acao="status">Alterar status</button>
+      <button class="bt peq" data-acao="dados">Editar dados</button>
+      ${e.posicao_id ? `<button class="bt peq per" data-acao="retirar">Retirar da posição</button>` : ''}
+    </div>` : ''}
+    <h2>Identificação</h2>
+    <dl class="ficha" style="margin:0">
+      ${campo('SN da placa', e.numero_serie ? `<span class="mono" style="font-size:17px">${esc(e.numero_serie)}</span>` : `<span class="tg warn">${esc(SITUACAO_SN[e.situacao_sn] || 'Pendente')}</span>`)}
+      ${e.sn_observacao ? campo('Observação do SN', esc(e.sn_observacao)) : ''}
+      ${campo('TAG de rastreio', `<span class="mono">${esc(e.tag_rastreio)}</span>`)}
+      ${campo('Localização atual', loc)}
+      ${e.tag_consorcio ? campo('TAG do consórcio', esc(e.tag_consorcio)) : ''}
+      ${e.instalado_em ? campo('Instalado desde', fmtD(e.instalado_em)) : ''}
+      ${campo('Ocorrências', `${e.total_ocorrencias} (${e.ocorrencias_abertas} abertas${e.ocorrencias_agua ? `, ${e.ocorrencias_agua} de água` : ''})`)}
+    </dl>
+    <h2>Dados de placa e recebimento</h2>
+    <dl class="ficha" style="margin:0">
+      ${placa.map(([k,v]) => campo(esc(ROTULO_CAMPO[k] || k), esc(v))).join('')}
+      ${campo('Ano de fabricação', esc(e.ano_fabricacao || '—'))}
+      ${campo('Recebimento', fmtD(e.data_recebimento))}
+      ${campo('Nota fiscal', esc(e.nota_fiscal || '—'))}
+      ${campo('Fornecedor', esc(e.fornecedor || '—'))}
+      ${campo('Garantia até', e.garantia_ate ? `${fmtD(e.garantia_ate)} ${e.em_garantia ? '<span class="tg ok">em garantia</span>' : '<span class="tg">vencida</span>'}` : '—')}
+      ${e.observacoes ? campo('Observações', esc(e.observacoes)) : ''}
+    </dl>
+    <h2>Histórico</h2>
+    ${hist.length ? `<div class="tempo">${hist.map(h => {
+      const [rot, cor] = EVENTO[h.evento] || [h.evento, '#64748b'];
+      return `<div class="ev" style="--c:${cor}"><div class="q">${fmtDH(h.data)} · ${esc(rot)} · ${esc(h.responsavel || '')}</div>
+        <div class="o">${esc(h.titulo)}</div>${h.detalhe ? `<div class="d">${esc(h.detalhe)}</div>` : ''}</div>`;
+    }).join('')}</div>` : '<div class="lista"><div class="vazio">Sem movimentações ainda.</div></div>'}
+    <h2>Alterações de cadastro</h2>
+    ${alteracoes.length ? `<div class="lista">${alteracoes.map(a => `<div class="li"><div style="flex:1">
+      <div class="sub">${fmtDH(a.em)} · ${esc(nomeUsuario(a.usuario_id))}</div>
+      ${(a.alterados || []).map(c => `<div><b>${esc(CAMPO_AUD[c] || c)}</b>: ${esc(fmtVal(a.antes?.[c], c))} → <b>${esc(fmtVal(a.depois?.[c], c))}</b></div>`).join('')}
+    </div></div>`).join('')}</div>` : '<div class="sub">Nenhuma alteração desde o cadastro.</div>'}
+    <div class="sub" style="margin-top:8px">Cadastrado em ${fmtDH(e.criado_em)}.</div>`, e);
+}
+const CAMPO_AUD = {
+  status_codigo:'Status', numero_serie:'SN', situacao_sn:'Situação do SN', sn_observacao:'Observação do SN',
+  dados_placa:'Dados de placa', nota_fiscal:'Nota fiscal', fornecedor:'Fornecedor', garantia_ate:'Garantia até',
+  data_recebimento:'Recebimento', ano_fabricacao:'Ano de fabricação', observacoes:'Observações',
+  fabricante_id:'Fabricante', modelo_id:'Modelo', tipo_codigo:'Tipo'
+};
+function fmtVal(v, campo) {
+  if (v == null || v === '') return '—';
+  if (campo === 'status_codigo') return stInfo(v).nome;
+  if (campo === 'situacao_sn') return v === 'INFORMADO' ? 'Informado' : (SITUACAO_SN[v] || v);
+  if (campo === 'fabricante_id') return S.ref.fabricantes.find(f => f.id === v)?.nome || v;
+  if (campo === 'garantia_ate' || campo === 'data_recebimento') return fmtD(v);
+  if (typeof v === 'object') { const e = Object.entries(v); return e.length ? e.map(([k, x]) => `${ROTULO_CAMPO[k] || k}: ${x}`).join('; ') : '—'; }
+  return String(v);
+}
+
+function acoesEquip(acao, e) {
+  const tp = S.ref.tipos.find(t => t.codigo === e.tipo_codigo);
+  if (acao === 'sn') {
+    modal(e.sn_pendente ? 'Informar SN' : 'Corrigir SN', `
+      ${e.sn_pendente ? '' : '<div class="info">A correção fica registrada no histórico de alterações (valor antigo, novo, quem e quando).</div>'}
+      <div data-erro></div>
+      <div class="campo"><label>SN da placa</label><input class="sninput" name="sn" value="${esc(e.numero_serie || '')}" required autocomplete="off"></div>
+      ${tp.formato_sn_descricao ? `<div class="campo"><span class="dica">Formato: ${esc(tp.formato_sn_descricao)}</span></div>` : ''}
+      <div class="campo"><label>Como o SN foi identificado / motivo</label><input name="obs" placeholder="Ex.: conferido no romaneio da Coester" ${e.sn_pendente ? '' : 'required'}></div>`,
+      'Salvar', async (form, erro) => {
+        const f = new FormData(form); const sn = f.get('sn').replace(/\s+/g, '').toUpperCase();
+        if (tp.formato_sn && !(new RegExp(tp.formato_sn)).test(sn)) return erro(`SN "${sn}" fora do padrão (${tp.formato_sn_descricao}).`);
+        const obs = f.get('obs').trim();
+        const upd = { numero_serie: sn };
+        if (obs) upd.sn_observacao = obs;
+        await q(sb.from('equipamentos').update(upd).eq('id', e.id).select('id').single());
+        invalidar(); toast('SN gravado.'); return true;
+      });
+  }
+  if (acao === 'status') {
+    const instalado = !!e.posicao_id;
+    const ops = S.ref.status.filter(s => s.codigo !== e.status_codigo && (instalado ? s.exige_instalacao !== false : s.exige_instalacao !== true));
+    modal('Alterar status', `
+      <div class="info">${instalado ? 'A peça está instalada: só aparecem situações compatíveis. Para tirá-la da posição use "Retirar da posição".' : 'A peça está fora de posição: para colocá-la em operação, instale-a pela tela do filtro.'}</div>
+      <div data-erro></div>
+      <div class="campo"><label>Novo status</label><select name="status" required>${ops.map(s => `<option value="${s.codigo}">${esc(s.nome)}</option>`).join('')}</select></div>`,
+      'Salvar', async (form, erro) => {
+        const st = new FormData(form).get('status');
+        if (st === 'BAIXADO' && !confirm('Baixar o equipamento é definitivo (sucata/devolução). Confirmar?')) return false;
+        await q(sb.from('equipamentos').update({ status_codigo: st }).eq('id', e.id).select('id').single());
+        invalidar(); toast('Status atualizado.'); return true;
+      });
+  }
+  if (acao === 'dados') {
+    const campos = (tp.campos_placa || []);
+    const dp = e.dados_placa || {};
+    modal('Editar dados', `<div data-erro></div>
+      <div class="dupla">${campos.map(c => `<div class="campo"><label>${esc(ROTULO_CAMPO[c] || c)}</label><input name="pl_${c}" value="${esc(dp[c] ?? '')}"></div>`).join('')}</div>
+      <div class="dupla">
+        <div class="campo"><label>Ano de fabricação</label><input name="ano_fabricacao" inputmode="numeric" value="${esc(e.ano_fabricacao || '')}"></div>
+        <div class="campo"><label>Data de recebimento</label><input type="date" name="data_recebimento" value="${esc(e.data_recebimento || '')}"></div>
+        <div class="campo"><label>Nota fiscal</label><input name="nota_fiscal" value="${esc(e.nota_fiscal || '')}"></div>
+        <div class="campo"><label>Fornecedor</label><input name="fornecedor" value="${esc(e.fornecedor || '')}"></div>
+        <div class="campo"><label>Garantia até</label><input type="date" name="garantia_ate" value="${esc(e.garantia_ate || '')}"></div>
+      </div>
+      <div class="campo"><label>Observações</label><textarea name="observacoes" rows="3">${esc(e.observacoes || '')}</textarea></div>`,
+      'Salvar', async form => {
+        const f = new FormData(form); const novo = { ...dp };
+        for (const c of campos) { const v = (f.get('pl_' + c) || '').trim(); if (v) novo[c] = v; else delete novo[c]; }
+        const n = s => (f.get(s) || '').trim() || null;
+        await q(sb.from('equipamentos').update({
+          dados_placa: novo, ano_fabricacao: n('ano_fabricacao') ? Number(n('ano_fabricacao')) : null,
+          data_recebimento: n('data_recebimento'), nota_fiscal: n('nota_fiscal'), fornecedor: n('fornecedor'),
+          garantia_ate: n('garantia_ate'), observacoes: n('observacoes')
+        }).eq('id', e.id).select('id').single());
+        invalidar(); toast('Dados atualizados.'); return true;
+      });
+  }
+  if (acao === 'retirar') {
+    const ops = S.ref.status.filter(s => s.exige_instalacao !== true && s.codigo !== 'SUBSTITUIDO');
+    modal('Retirar da posição', `
+      <div class="info">A peça sai de <b>${esc(e.tag_local)}</b>. O período em que ela esteve instalada fica guardado no histórico.</div>
+      <div data-erro></div>
+      <div class="campo"><label>Motivo</label><input name="motivo" required placeholder="Ex.: instalada na posição errada / enviada para reparo"></div>
+      <div class="dupla">
+        <div class="campo"><label>Data</label><input type="date" name="data" value="${hoje()}" max="${hoje()}" required></div>
+        <div class="campo"><label>Fica com o status</label><select name="status">${ops.map(s => `<option value="${s.codigo}" ${s.codigo === 'RETIRADO' ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>
+      </div>
+      <div class="campo"><label>Responsável</label><input name="responsavel" value="${esc(S.perfil.nome)}" required></div>`,
+      'Retirar', async form => {
+        const f = new FormData(form);
+        await q(sb.rpc('retirar_equipamento', { p_equipamento_id: e.id, p_motivo: f.get('motivo').trim(),
+          p_responsavel: f.get('responsavel').trim(), p_data: dataParaTs(f.get('data')), p_novo_status: f.get('status') }));
+        invalidar(); toast('Peça retirada da posição.'); return true;
+      });
+  }
+}
+
+/* ---------- busca ---------- */
+let filtroBusca = 'todos';
+async function telaBusca() {
+  const termo = new URLSearchParams(location.hash.split('?')[1] || '').get('q') || '';
+  const chips = [['todos','Todos'],['semsn','SN pendente'],['defeito','Com defeito'],['estoque','Fora de posição']];
+  let resultado = [], posicoesAchadas = [];
+  const limpo = termo.replace(/[,()*%\\]/g, ' ').trim();
+  if (limpo || filtroBusca !== 'todos') {
+    let qb = sb.from('vw_equipamentos').select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,fabricante,status_codigo,posicao_id,tag_local,posicao_descricao');
+    if (limpo) qb = qb.or(['numero_serie','tag_rastreio','fabricante','tag_local','tag_consorcio'].map(c => `${c}.ilike.*${limpo}*`).join(','));
+    if (filtroBusca === 'semsn') qb = qb.is('numero_serie', null);
+    if (filtroBusca === 'defeito') qb = qb.in('status_codigo', DEFEITO);
+    if (filtroBusca === 'estoque') qb = qb.is('posicao_id', null).neq('status_codigo', 'BAIXADO');
+    resultado = await q(qb.order('tag_rastreio', { ascending:true }).limit(200));
+    if (limpo) {
+      const pos = await carregarPosicoes();
+      const t = limpo.toUpperCase();
+      posicoesAchadas = pos.filter(p => (p.tag_local || '').toUpperCase().includes(t) || (p.tag_consorcio || '').toUpperCase().includes(t)).slice(0, 30);
+    }
+  }
+  return moldura('busca', `
+    <h1>Buscar</h1>
+    <form class="busca" id="fbusca"><input name="q" value="${esc(termo)}" placeholder="SN, TAG de rastreio, fabricante ou local (ex.: GA-F01)" autocomplete="off" enterkeyhint="search"><button class="bt pri">Buscar</button></form>
+    <div class="chips">${chips.map(([k,l]) => `<button class="chip ${filtroBusca === k ? 'on' : ''}" data-chip="${k}">${l}</button>`).join('')}</div>
+    ${posicoesAchadas.length ? `<h2>Posições (${posicoesAchadas.length})</h2><div class="lista">${posicoesAchadas.map(p => `<a class="li" href="#/f/${esc(p.galeria)}/${p.filtro_numero}"><div style="flex:1"><b class="mono">${esc(p.tag_local)}</b> · ${esc(p.descricao)}</div><span class="sub">${p.tipos_previstos.length - p.tipos_pendentes.length}/${p.tipos_previstos.length}</span></a>`).join('')}</div>` : ''}
+    ${(limpo || filtroBusca !== 'todos') ? `<h2>Equipamentos (${resultado.length}${resultado.length === 200 ? '+' : ''})</h2>
+      <div class="lista">${resultado.map(linhaEquip).join('') || '<div class="vazio">Nada encontrado.</div>'}</div>` : '<div class="sub" style="margin-top:14px">Digite um SN, uma TAG ou um local, ou escolha um filtro acima.</div>'}`);
+}
+
+/* ---------- estoque ---------- */
+async function telaEstoque() {
+  const eq = await carregarEquip();
+  const fora = eq.filter(e => !e.posicao_id && e.status_codigo !== 'BAIXADO');
+  const porTipo = S.ref.tipos.map(t => [t, fora.filter(e => e.tipo_codigo === t.codigo)]).filter(([,l]) => l.length);
+  return moldura('estoque', `
+    <div class="linha"><h1>Estoque e peças fora de posição</h1><span class="esp"></span>${pode() ? '<button class="bt pri" data-receber>+ Receber peça</button>' : ''}</div>
+    <div class="sub">Peças recebidas e ainda não instaladas, retiradas ou em manutenção.</div>
+    ${porTipo.map(([t, l]) => `<h2>${esc(t.nome)} (${l.length})</h2><div class="lista">${l.map(linhaEquip).join('')}</div>`).join('') || '<div class="lista" style="margin-top:14px"><div class="vazio">Nenhuma peça fora de posição.</div></div>'}`);
+}
+
+function abrirReceber() {
+  const tipos = S.ref.tipos;
+  modal('Receber peça', `<div data-erro></div>
+    <div class="dupla">
+      <div class="campo"><label>Tipo</label><select name="tipo">${tipos.map(t => `<option value="${t.codigo}">${esc(t.nome)}</option>`).join('')}</select></div>
+      <div class="campo"><label>Fabricante</label><select name="fab">${S.ref.fabricantes.map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}</select></div>
+    </div>
+    <div class="campo"><label>SN da placa</label><input class="sninput" name="sn" autocomplete="off"><span class="dica" data-fmt></span></div>
+    <label class="chk"><input type="checkbox" name="semsn"> Sem SN (placa caiu, ilegível ou não conferida)</label>
+    <div data-semsn class="hide">
+      <div class="campo"><label>Situação</label><select name="situacao">${Object.entries(SITUACAO_SN).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+      <div class="campo"><label>Motivo / observação (obrigatório)</label><input name="motivo"></div>
+    </div>
+    <div class="dupla">
+      <div class="campo"><label>Data de recebimento</label><input type="date" name="data_recebimento" value="${hoje()}"></div>
+      <div class="campo"><label>Nota fiscal</label><input name="nota_fiscal"></div>
+      <div class="campo"><label>Fornecedor</label><input name="fornecedor"></div>
+      <div class="campo"><label>Garantia até</label><input type="date" name="garantia_ate"></div>
+    </div>
+    <div class="campo"><label>Observações</label><textarea name="observacoes" rows="2"></textarea></div>`,
+    'Cadastrar', async (form, erro) => {
+      const f = new FormData(form); const t = f.get('tipo'); const tp = tipos.find(x => x.codigo === t);
+      const sn = (f.get('sn') || '').replace(/\s+/g, '').toUpperCase(); const semSn = f.get('semsn') === 'on';
+      const n = s => (f.get(s) || '').trim() || null;
+      const reg = { tipo_codigo: t, fabricante_id: f.get('fab'), data_recebimento: n('data_recebimento'), nota_fiscal: n('nota_fiscal'),
+                    fornecedor: n('fornecedor'), garantia_ate: n('garantia_ate'), observacoes: n('observacoes') };
+      if (semSn) {
+        if (!n('motivo')) return erro('Informe o motivo da falta do SN.');
+        Object.assign(reg, { situacao_sn: f.get('situacao'), sn_observacao: n('motivo') });
+      } else {
+        if (!sn && tp.sn_obrigatorio) return erro(`Informe o SN ou marque "Sem SN".`);
+        if (sn && tp.formato_sn && !(new RegExp(tp.formato_sn)).test(sn)) return erro(`SN "${sn}" fora do padrão (${tp.formato_sn_descricao}).`);
+        if (sn) reg.numero_serie = sn;
+      }
+      const novo = await q(sb.from('equipamentos').insert(reg).select('id,tag_rastreio').single());
+      invalidar(); toast(`Peça cadastrada: ${novo.tag_rastreio}`); return true;
+    }, el => {
+      const fmt = () => { const tp = tipos.find(x => x.codigo === el.querySelector('[name=tipo]').value);
+        el.querySelector('[data-fmt]').textContent = tp.formato_sn_descricao ? 'Formato: ' + tp.formato_sn_descricao : '';
+        const fab = S.ref.fabricantes.find(f => f.nome === FAB_PADRAO[tp.codigo]); if (fab) el.querySelector('[name=fab]').value = fab.id; };
+      el.querySelector('[name=tipo]').addEventListener('change', fmt); fmt();
+      el.querySelector('[name=semsn]').addEventListener('change', ev => {
+        el.querySelector('[data-semsn]').classList.toggle('hide', !ev.target.checked);
+        el.querySelector('[name=sn]').disabled = ev.target.checked;
+      });
+    });
+}
+
+/* ---------- conta ---------- */
+async function telaConta() {
+  if (admin()) S.ref.perfis = await q(sb.from('perfis').select('*').order('nome'));
+  return moldura('conta', `
+    <h1>Minha conta</h1>
+    <dl class="ficha" style="margin:12px 0 0">
+      <div><dt>Nome</dt><dd>${esc(S.perfil.nome)}</dd></div>
+      <div><dt>E-mail</dt><dd>${esc(S.sessao.user.email)}</dd></div>
+      <div><dt>Papel</dt><dd>${esc({admin:'Administrador',editor:'Editor (cadastra e movimenta)',leitor:'Leitor (somente consulta)'}[S.perfil.papel])}</dd></div>
+    </dl>
+    <div class="linha" style="margin-top:14px"><button class="bt" data-senha>Trocar minha senha</button><button class="bt per" data-sair>Sair</button></div>
+    ${admin() ? `<h2>Usuários</h2>
+      <div class="info">Para incluir uma pessoa: Supabase › Authentication › Users › Add user › Create new user (marque "Auto Confirm User"). Ela aparece aqui como <b>leitor</b>; troque o papel se ela for cadastrar peças.</div>
+      <div class="lista"><table class="t"><thead><tr><th>Nome</th><th>Papel</th></tr></thead><tbody>
+      ${S.ref.perfis.map(p => `<tr><td>${esc(p.nome)}</td><td>${p.user_id === S.sessao.user.id ? '<b>admin</b> (você)' :
+        `<select data-papel="${p.user_id}">${['leitor','editor','admin'].map(x => `<option ${x === p.papel ? 'selected' : ''}>${x}</option>`).join('')}</select>`}</td></tr>`).join('')}
+      </tbody></table></div>` : ''}
+    <div class="sub" style="margin-top:24px">${VERSAO}</div>`);
+}
+
+/* =====================================================================
+   MODAL GENÉRICO
+   ===================================================================== */
+function modal(titulo, corpo, rotuloOk, aoSalvar, aoAbrir) {
+  const fundo = document.createElement('div'); fundo.className = 'fundo';
+  fundo.innerHTML = `<form class="modal" novalidate>
+    <div class="mc"><h3>${esc(titulo)}</h3><button type="button" class="x" aria-label="Fechar">×</button></div>
+    <div class="mb">${corpo}</div>
+    <div class="mr"><button type="button" class="bt" data-fechar>Cancelar</button><button class="bt pri" type="submit">${esc(rotuloOk)}</button></div></form>`;
+  document.body.appendChild(fundo);
+  const form = fundo.querySelector('form');
+  const fechar = () => fundo.remove();
+  fundo.querySelector('.x').onclick = fechar; fundo.querySelector('[data-fechar]').onclick = fechar;
+  const caixaErro = () => form.querySelector('[data-erro]') || form.querySelector('.mb');
+  const mostrarErro = m => { const c = caixaErro(); c.innerHTML = `<div class="erro">${esc(m)}</div>`; c.scrollIntoView({ block:'nearest' }); return false; };
+  form.onsubmit = async ev => {
+    ev.preventDefault();
+    const obrig = [...form.querySelectorAll('[required]')].find(i => !i.disabled && !String(i.value).trim());
+    if (obrig) { obrig.focus(); return mostrarErro('Preencha os campos obrigatórios.'); }
+    const b = form.querySelector('[type=submit]'); b.disabled = true; const txt = b.textContent; b.textContent = 'Salvando…';
+    try { if (await aoSalvar(form, mostrarErro)) { fechar(); rotear(); } }
+    catch (e) { mostrarErro(msgErro(e)); }
+    finally { b.disabled = false; b.textContent = txt; }
+  };
+  if (aoAbrir) aoAbrir(form);
+  setTimeout(() => form.querySelector('input:not([type=hidden]):not([type=radio]):not([type=checkbox]),select')?.focus(), 50);
+}
+
+/* =====================================================================
+   ROTEADOR E EVENTOS
+   ===================================================================== */
+let equipAtual = null;
+async function rotear() {
+  if (!S.sessao) return telaLogin();
+  const [rota] = location.hash.replace(/^#/, '').split('?');
+  const partes = rota.split('/').filter(Boolean);
+  const app = $('#app');
+  if (!app.querySelector('main')) app.innerHTML = '<div class="carregando">Carregando…</div>';
+  else app.querySelector('main').innerHTML = '<div class="carregando">Carregando…</div>';
+  try {
+    let html;
+    equipAtual = null;
+    if (!partes.length) html = await telaPainel();
+    else if (partes[0] === 'g') html = await telaGaleria(decodeURIComponent(partes[1] || 'A'));
+    else if (partes[0] === 'f') html = await telaFiltro(decodeURIComponent(partes[1]), partes[2]);
+    else if (partes[0] === 'e') html = await telaEquip(partes[1]);
+    else if (partes[0] === 'busca') html = await telaBusca();
+    else if (partes[0] === 'estoque') html = await telaEstoque();
+    else if (partes[0] === 'conta') html = await telaConta();
+    else html = await telaPainel();
+    app.innerHTML = html;
+    window.scrollTo(0, 0);
+  } catch (e) {
+    console.error(e);
+    if (/JWT|session|token/i.test(e.message || '')) { S.sessao = null; return telaLogin('Sua sessão expirou. Entre novamente.'); }
+    app.innerHTML = moldura('', `<div class="erro">Não foi possível carregar: ${esc(msgErro(e))}</div><button class="bt" onclick="rotear()">Tentar de novo</button>`);
+  }
+}
+
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair]');
+  if (!t) return;
+  if (t.dataset.ir) location.hash = t.dataset.ir;
+  else if (t.dataset.registrar) abrirRegistrar(t.dataset.registrar).catch(e => toast(msgErro(e)));
+  else if (t.dataset.acao && equipAtual) acoesEquip(t.dataset.acao, equipAtual);
+  else if (t.dataset.chip) { filtroBusca = t.dataset.chip; rotear(); }
+  else if ('receber' in t.dataset) abrirReceber();
+  else if ('sair' in t.dataset) { await sb.auth.signOut(); S.sessao = null; invalidar(); location.hash = '#/'; telaLogin(); }
+  else if ('senha' in t.dataset) modal('Trocar minha senha', `<div data-erro></div>
+      <div class="campo"><label>Nova senha (mínimo 8 caracteres)</label><input type="password" name="s1" required autocomplete="new-password"></div>
+      <div class="campo"><label>Repita a nova senha</label><input type="password" name="s2" required autocomplete="new-password"></div>`,
+      'Trocar', async (form, erro) => {
+        const f = new FormData(form);
+        if (f.get('s1').length < 8) return erro('A senha deve ter pelo menos 8 caracteres.');
+        if (f.get('s1') !== f.get('s2')) return erro('As senhas não conferem.');
+        const { error } = await sb.auth.updateUser({ password: f.get('s1') }); if (error) throw error;
+        toast('Senha alterada.'); return true;
+      });
+});
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.dataset?.ir) location.hash = ev.target.dataset.ir; });
+document.addEventListener('change', async ev => {
+  const s = ev.target.closest('[data-papel]'); if (!s) return;
+  try { await q(sb.from('perfis').update({ papel: s.value }).eq('user_id', s.dataset.papel).select('user_id').single()); toast('Papel atualizado.'); }
+  catch (e) { toast(msgErro(e)); rotear(); }
+});
+document.addEventListener('submit', ev => {
+  if (ev.target.id !== 'fbusca') return;
+  ev.preventDefault(); const v = new FormData(ev.target).get('q').trim();
+  const novo = '#/busca' + (v ? '?q=' + encodeURIComponent(v) : '');
+  if (location.hash === novo) rotear(); else location.hash = novo;
+});
+window.addEventListener('hashchange', rotear);
+
+async function iniciar() {
+  try { await carregarRef(); } catch (e) { return telaLogin('Erro ao carregar dados: ' + msgErro(e)); }
+  rotear();
+}
+(async () => {
+  const { data } = await sb.auth.getSession();
+  S.sessao = data.session;
+  sb.auth.onAuthStateChange((ev, sessao) => { if (ev === 'SIGNED_OUT') { S.sessao = null; } else if (sessao) S.sessao = sessao; });
+  if (S.sessao) iniciar(); else telaLogin();
+})();
+</script>
+</body>
+</html>
