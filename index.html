@@ -215,7 +215,7 @@ table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
    ===================================================================== */
 const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
-const VERSAO = 'v0.3 · Relatório consolidado';
+const VERSAO = 'v0.4 · Carga inicial (data estimada, TAG CEDAE)';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -294,7 +294,7 @@ async function carregarPosicoes(forcar) {
 async function carregarEquip(forcar) {
   if (S.equip && !forcar) return S.equip;
   S.equip = await buscarTodos(() => sb.from('vw_equipamentos')
-    .select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,situacao_sn,fabricante,modelo,status_codigo,posicao_id,tag_local,tag_consorcio,galeria,filtro,posicao_descricao,instalado_em,total_ocorrencias,ocorrencias_abertas,ocorrencias_agua,garantia_ate,nota_fiscal')
+    .select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,situacao_sn,fabricante,modelo,status_codigo,posicao_id,tag_local,tag_consorcio,galeria,filtro,posicao_descricao,instalado_em,instalacao_data_estimada,observacoes,total_ocorrencias,ocorrencias_abertas,ocorrencias_agua,garantia_ate,nota_fiscal')
     .order('tag_rastreio', { ascending:true }));
   return S.equip;
 }
@@ -393,6 +393,7 @@ function linhaEquip(e) {
     <div style="min-width:0;flex:1">
       <div><b class="mono">${esc(e.tag_rastreio)}</b> · ${esc(tipoNome(e.tipo_codigo))} · ${esc(e.fabricante)}</div>
       <div class="sub">SN ${e.numero_serie ? `<b class="mono">${esc(e.numero_serie)}</b>` : '<span class="tg warn">pendente</span>'} · ${local}</div>
+      ${filtroBusca === 'conferir' && (e.sn_observacao || /^CONFERIR/.test(e.observacoes || '')) ? `<div class="sub" style="color:#92400e">${esc(!e.numero_serie ? e.sn_observacao : e.observacoes)}</div>` : ''}
     </div>${pill(e.status_codigo)}</a>`;
 }
 
@@ -453,7 +454,7 @@ function cardPosicao(p) {
   return `<div class="pos ${cls}">
     <div class="cab"><span class="item">${esc(p.item ?? '•')}</span>
       <div style="flex:1;min-width:0"><div class="nome">${esc(p.descricao)}</div>
-      <div class="loc">${esc(p.tag_local)}${p.tag_consorcio ? ' · Consórcio: ' + esc(p.tag_consorcio) : ''}</div></div>
+      <div class="loc">${esc(p.tag_local)}${p.tag_consorcio ? ' · CEDAE: ' + esc(p.tag_consorcio) : ''}</div></div>
       ${p.ocorrencias_abertas > 0 ? `<span class="tg bad">${p.ocorrencias_abertas} ocorr.</span>` : ''}</div>
     ${pecas}
     <div class="rod">
@@ -572,6 +573,7 @@ async function telaEquip(id) {
       ${e.sn_pendente ? `<button class="bt pri peq" data-acao="sn">Informar SN</button>` : `<button class="bt peq" data-acao="sn">Corrigir SN</button>`}
       <button class="bt peq" data-acao="status">Alterar status</button>
       <button class="bt peq" data-acao="dados">Editar dados</button>
+      ${e.posicao_id && e.instalacao_data_estimada ? `<button class="bt peq" data-acao="data">Informar data real de instalação</button>` : ''}
       ${e.posicao_id ? `<button class="bt peq per" data-acao="retirar">Retirar da posição</button>` : ''}
     </div>` : ''}
     <h2>Identificação</h2>
@@ -580,8 +582,8 @@ async function telaEquip(id) {
       ${e.sn_observacao ? campo('Observação do SN', esc(e.sn_observacao)) : ''}
       ${campo('TAG de rastreio', `<span class="mono">${esc(e.tag_rastreio)}</span>`)}
       ${campo('Localização atual', loc)}
-      ${e.tag_consorcio ? campo('TAG do consórcio', esc(e.tag_consorcio)) : ''}
-      ${e.instalado_em ? campo('Instalado desde', fmtD(e.instalado_em)) : ''}
+      ${e.tag_consorcio ? campo('TAG CEDAE', esc(e.tag_consorcio)) : ''}
+      ${e.instalado_em ? campo('Instalado desde', fmtD(e.instalado_em) + (e.instalacao_data_estimada ? ' <span class="tg warn">data estimada</span>' : '')) : ''}
       ${campo('Ocorrências', `${e.total_ocorrencias} (${e.ocorrencias_abertas} abertas${e.ocorrencias_agua ? `, ${e.ocorrencias_agua} de água` : ''})`)}
     </dl>
     <h2>Dados de placa e recebimento</h2>
@@ -681,6 +683,19 @@ function acoesEquip(acao, e) {
         invalidar(); toast('Dados atualizados.'); return true;
       });
   }
+  if (acao === 'data') {
+    modal('Data real de instalação', `
+      <div class="info">A data atual (${fmtD(e.instalado_em)}) é <b>estimada</b>. Ela pode ser corrigida <b>uma única vez</b>; depois fica travada como as demais. A correção fica registrada no histórico.</div>
+      <div data-erro></div>
+      <div class="campo"><label>Data real da instalação</label><input type="date" name="data" max="${hoje()}" required></div>
+      <div class="campo"><label>De onde veio essa data</label><input name="fonte" required placeholder="Ex.: diário de obra de 15/08/2025, foto datada, NF de montagem"></div>`,
+      'Gravar data real', async form => {
+        const f = new FormData(form);
+        if (!confirm('Confirma a data ' + fmtD(f.get('data')) + '? Depois de gravada ela não poderá mais ser alterada.')) return false;
+        await q(sb.rpc('corrigir_data_instalacao', { p_equipamento_id: e.id, p_data: f.get('data') + 'T12:00:00-03:00', p_fonte: f.get('fonte').trim() }));
+        invalidar(); toast('Data real de instalação gravada.'); return true;
+      });
+  }
   if (acao === 'retirar') {
     const ops = S.ref.status.filter(s => s.exige_instalacao !== true && s.codigo !== 'SUBSTITUIDO');
     modal('Retirar da posição', `
@@ -705,16 +720,17 @@ function acoesEquip(acao, e) {
 let filtroBusca = 'todos';
 async function telaBusca() {
   const termo = new URLSearchParams(location.hash.split('?')[1] || '').get('q') || '';
-  const chips = [['todos','Todos'],['semsn','SN pendente'],['defeito','Com defeito'],['estoque','Fora de posição']];
+  const chips = [['todos','Todos'],['semsn','SN pendente'],['defeito','Com defeito'],['estoque','Fora de posição'],['conferir','Conferir em campo']];
   let resultado = [], posicoesAchadas = [];
   const limpo = termo.replace(/[,()*%\\]/g, ' ').trim();
   if (limpo || filtroBusca !== 'todos') {
-    let qb = sb.from('vw_equipamentos').select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,fabricante,status_codigo,posicao_id,tag_local,posicao_descricao');
+    let qb = sb.from('vw_equipamentos').select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,fabricante,status_codigo,posicao_id,tag_local,posicao_descricao,sn_observacao,observacoes');
     if (limpo) qb = qb.or(['numero_serie','tag_rastreio','fabricante','tag_local','tag_consorcio'].map(c => `${c}.ilike.*${limpo}*`).join(','));
     if (filtroBusca === 'semsn') qb = qb.is('numero_serie', null);
     if (filtroBusca === 'defeito') qb = qb.in('status_codigo', DEFEITO);
     if (filtroBusca === 'estoque') qb = qb.is('posicao_id', null).neq('status_codigo', 'BAIXADO');
-    resultado = await q(qb.order('tag_rastreio', { ascending:true }).limit(200));
+    if (filtroBusca === 'conferir') qb = qb.or('numero_serie.is.null,observacoes.ilike.CONFERIR*');
+    resultado = await q(qb.order('tag_local', { ascending:true }).order('tag_rastreio', { ascending:true }).limit(300));
     if (limpo) {
       const pos = await carregarPosicoes();
       const t = limpo.toUpperCase();
@@ -726,7 +742,7 @@ async function telaBusca() {
     <form class="busca" id="fbusca"><input name="q" value="${esc(termo)}" placeholder="SN, TAG de rastreio, fabricante ou local (ex.: GA-F01)" autocomplete="off" enterkeyhint="search"><button class="bt pri">Buscar</button></form>
     <div class="chips">${chips.map(([k,l]) => `<button class="chip ${filtroBusca === k ? 'on' : ''}" data-chip="${k}">${l}</button>`).join('')}</div>
     ${posicoesAchadas.length ? `<h2>Posições (${posicoesAchadas.length})</h2><div class="lista">${posicoesAchadas.map(p => `<a class="li" href="#/f/${esc(p.galeria)}/${p.filtro_numero}"><div style="flex:1"><b class="mono">${esc(p.tag_local)}</b> · ${esc(p.descricao)}</div><span class="sub">${p.tipos_previstos.length - p.tipos_pendentes.length}/${p.tipos_previstos.length}</span></a>`).join('')}</div>` : ''}
-    ${(limpo || filtroBusca !== 'todos') ? `<h2>Equipamentos (${resultado.length}${resultado.length === 200 ? '+' : ''})</h2>
+    ${(limpo || filtroBusca !== 'todos') ? `<h2>Equipamentos (${resultado.length}${resultado.length === 300 ? '+' : ''})</h2>
       <div class="lista">${resultado.map(linhaEquip).join('') || '<div class="vazio">Nada encontrado.</div>'}</div>` : '<div class="sub" style="margin-top:14px">Digite um SN, uma TAG ou um local, ou escolha um filtro acima.</div>'}`);
 }
 
@@ -854,7 +870,7 @@ async function telaRelatorio() {
     return `<td><span class="sn">${p[k + '_sn'] ? esc(p[k + '_sn']) : 'SN pendente'}</span><span class="s"><i style="--c:${esc(s.cor)}"></i>${esc(s.nome)}</span></td>`;
   };
   const tabela = pr.modo === 'posicao' ? `
-    <table class="rel"><thead><tr><th class="rx">Gal.</th><th class="rx">Filtro</th><th>Item</th><th>Posição</th><th>TAG local</th><th class="rx">TAG consórcio</th>
+    <table class="rel"><thead><tr><th class="rx">Gal.</th><th class="rx">Filtro</th><th>Item</th><th>Posição</th><th>TAG local</th><th class="rx">TAG CEDAE</th>
       <th>Válvula (SN)</th><th>Atuador (SN)</th><th>Redutor (SN)</th><th>Situação</th><th>Ocorr.</th></tr></thead><tbody>
     ${linhas.map(p => { const [sl, sc] = SIT_POS[situacaoPos(p)]; return `<tr>
       <td class="rx">${esc(p.galeria || '—')}</td><td class="rx">${esc(p.filtro || '—')}</td><td>${esc(p.item ?? '')}</td><td>${esc(p.descricao)}${p.nivel === 'SUPERIOR' ? ' <span class="s">galeria superior</span>' : ''}</td>
@@ -863,7 +879,7 @@ async function telaRelatorio() {
       <td><span class="s sit"><i style="--c:${sc}"></i>${sl}</span>${p.tipos_pendentes.length && p.tipos_pendentes.length < p.tipos_previstos.length ? `<span class="s">falta: ${esc(p.tipos_pendentes.map(tipoNome).join(', '))}</span>` : ''}</td>
       <td>${Number(p.ocorrencias_abertas) || '—'}</td></tr>`; }).join('')}
     </tbody></table>` : `
-    <table class="rel"><thead><tr><th>TAG rastreio</th><th>Tipo</th><th>Fabricante / modelo</th><th>SN</th><th>Localização</th><th class="rx">TAG consórcio</th>
+    <table class="rel"><thead><tr><th>TAG rastreio</th><th>Tipo</th><th>Fabricante / modelo</th><th>SN</th><th>Localização</th><th class="rx">TAG CEDAE</th>
       <th>Status</th><th>Instalado em</th><th>Ocorr. (água)</th><th>NF</th></tr></thead><tbody>
     ${linhas.map(e => { const s = stInfo(e.status_codigo); return `<tr>
       <td class="sn">${esc(e.tag_rastreio)}</td><td>${esc(tipoNome(e.tipo_codigo))}</td><td>${esc(e.fabricante)}${e.modelo ? '<span class="s">' + esc(e.modelo) + '</span>' : ''}</td>
@@ -871,7 +887,7 @@ async function telaRelatorio() {
       <td>${e.tag_local ? `<span class="sn">${esc(e.tag_local)}</span><span class="s">${esc(e.posicao_descricao || '')}</span>` : '<span class="fl">fora de posição</span>'}</td>
       <td class="rx">${esc(e.tag_consorcio || '—')}</td>
       <td><span class="s sit"><i style="--c:${esc(s.cor)}"></i>${esc(s.nome)}</span></td>
-      <td>${e.instalado_em ? fmtD(e.instalado_em) : '—'}</td><td>${e.total_ocorrencias ? `${e.total_ocorrencias} (${e.ocorrencias_agua})` : '—'}</td><td>${esc(e.nota_fiscal || '—')}</td></tr>`; }).join('')}
+      <td>${e.instalado_em ? fmtD(e.instalado_em) + (e.instalacao_data_estimada ? '<span class="s">estimada</span>' : '') : '—'}</td><td>${e.total_ocorrencias ? `${e.total_ocorrencias} (${e.ocorrencias_agua})` : '—'}</td><td>${esc(e.nota_fiscal || '—')}</td></tr>`; }).join('')}
     </tbody></table>`;
 
   S.ultimoRel = { pr, linhas, descFiltros };
@@ -913,14 +929,14 @@ function exportarCSV() {
   const { pr, linhas, descFiltros } = S.ultimoRel;
   const peca = (p, k) => !p.tipos_previstos.includes(k.toUpperCase()) ? ['n/a',''] : !p[k + '_id'] ? ['não instalado',''] : [p[k + '_sn'] || 'SN pendente', stInfo(p[k + '_status']).nome];
   const cab = pr.modo === 'posicao'
-    ? ['Galeria','Filtro','Item','Posição','Nível','TAG local','TAG consórcio','Válvula SN','Válvula status','Válvula fabricante','Atuador SN','Atuador status','Atuador fabricante','Redutor SN','Redutor status','Redutor fabricante','Situação','Falta','Ocorrências abertas']
-    : ['TAG rastreio','Tipo','Fabricante','Modelo','SN','Situação SN','TAG local','Posição','TAG consórcio','Status','Instalado em','Ocorrências','Ocorrências de água','Nota fiscal','Garantia até'];
+    ? ['Galeria','Filtro','Item','Posição','Nível','TAG local','TAG CEDAE','Válvula SN','Válvula status','Válvula fabricante','Atuador SN','Atuador status','Atuador fabricante','Redutor SN','Redutor status','Redutor fabricante','Situação','Falta','Ocorrências abertas']
+    : ['TAG rastreio','Tipo','Fabricante','Modelo','SN','Situação SN','TAG local','Posição','TAG CEDAE','Status','Instalado em','Data estimada','Ocorrências','Ocorrências de água','Nota fiscal','Garantia até'];
   const rows = linhas.map(x => pr.modo === 'posicao'
     ? [x.galeria, x.filtro, x.item, x.descricao, x.nivel, x.tag_local, x.tag_consorcio,
        ...peca(x,'valvula'), x.valvula_fabricante, ...peca(x,'atuador'), x.atuador_fabricante, ...peca(x,'redutor'), x.redutor_fabricante,
        SIT_POS[situacaoPos(x)][0], x.tipos_pendentes.map(tipoNome).join(', '), x.ocorrencias_abertas]
     : [x.tag_rastreio, tipoNome(x.tipo_codigo), x.fabricante, x.modelo, x.numero_serie, x.numero_serie ? 'Informado' : (SITUACAO_SN[x.situacao_sn] || 'Pendente'),
-       x.tag_local, x.posicao_descricao, x.tag_consorcio, stInfo(x.status_codigo).nome, x.instalado_em ? fmtD(x.instalado_em) : '',
+       x.tag_local, x.posicao_descricao, x.tag_consorcio, stInfo(x.status_codigo).nome, x.instalado_em ? fmtD(x.instalado_em) : '', x.instalado_em ? (x.instalacao_data_estimada ? 'Sim' : 'Não') : '',
        x.total_ocorrencias, x.ocorrencias_agua, x.nota_fiscal, x.garantia_ate ? fmtD(x.garantia_ate) : '']);
   const cel = v => { const t = String(v ?? ''); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
   const txt = [[`Relatório consolidado de equipamentos — ${S.ref.obras[0]?.nome || ''}`], [`Emitido em ${fmtDH(new Date().toISOString())} por ${S.perfil.nome} — Filtros: ${descFiltros}`], [], cab, ...rows]
