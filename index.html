@@ -164,8 +164,16 @@ table.rel .s.sit{font-size:12px;color:var(--ink)}
 .rel-kpis div{border:1px solid var(--line);border-radius:8px;padding:6px 8px}
 .rel-kpis b{display:block;font-size:17px}
 .rel-kpis span{font-size:10px;color:var(--ink2);text-transform:uppercase}
-.assin{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:46px;font-size:11px;text-align:center;color:var(--ink2)}
-.assin div{border-top:1px solid var(--ink);padding-top:6px}
+.assin{display:grid;grid-template-columns:repeat(var(--n,3),1fr);gap:36px;margin-top:54px;font-size:11px;text-align:center;color:var(--ink2);break-inside:avoid}
+.assin > div{border-top:1px solid var(--ink);padding-top:6px}
+.assin b{display:block;color:var(--ink);font-size:11.5px}
+.assin .dt{margin-top:10px;font-size:10px}
+body.retrato .assin{grid-template-columns:repeat(min(var(--n,3),2),1fr);row-gap:44px}
+.assin-ed{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:0 0 12px}
+.assin-ed summary{cursor:pointer;font-weight:600;font-size:14px}
+.assin-ed .lin4{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:10px}
+.assin-ed .lin4 > div{border:1px dashed var(--line);border-radius:10px;padding:8px 10px}
+.assin-ed input{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:7px 9px;margin-top:4px}
 @media (max-width:760px){.rel-kpis{grid-template-columns:repeat(2,1fr)}}
 @media print{
   @page{size:A4 landscape;margin:9mm}
@@ -215,7 +223,7 @@ table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
    ===================================================================== */
 const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
-const VERSAO = 'v0.4 · Carga inicial (data estimada, TAG CEDAE)';
+const VERSAO = 'v0.5 · Filtros A01–F12 e assinaturas editáveis';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -430,8 +438,8 @@ async function telaFiltro(g, n) {
   return moldura('filtros', `
     <div class="trilha"><a href="#/">Painel</a> › <a href="#/g/${esc(g)}">Galeria ${esc(g)}</a> › ${esc(pf[0].filtro)}</div>
     <div class="linha"><h1>Galeria ${esc(g)} · ${esc(pf[0].filtro)}</h1><span class="esp"></span>
-      ${ant ? `<a class="bt peq" href="#/f/${esc(g)}/${ant}">‹ F${String(ant).padStart(2,'0')}</a>` : ''}
-      ${prox ? `<a class="bt peq" href="#/f/${esc(g)}/${prox}">F${String(prox).padStart(2,'0')} ›</a>` : ''}</div>
+      ${ant ? `<a class="bt peq" href="#/f/${esc(g)}/${ant}">‹ ${esc(g)}${String(ant).padStart(2,'0')}</a>` : ''}
+      ${prox ? `<a class="bt peq" href="#/f/${esc(g)}/${prox}">${esc(g)}${String(prox).padStart(2,'0')} ›</a>` : ''}</div>
     <div class="sub">${rf.inst} de ${rf.prev} peças instaladas (${rf.pct}%)${rf.semSn ? ` · <span class="tg warn">${rf.semSn} sem SN</span>` : ''}</div>
     ${barra(rf.pct)}
     ${bloco('INFERIOR', 'Galeria inferior')}${bloco('SUPERIOR', 'Galeria superior')}`);
@@ -739,7 +747,7 @@ async function telaBusca() {
   }
   return moldura('busca', `
     <h1>Buscar</h1>
-    <form class="busca" id="fbusca"><input name="q" value="${esc(termo)}" placeholder="SN, TAG de rastreio, fabricante ou local (ex.: GA-F01)" autocomplete="off" enterkeyhint="search"><button class="bt pri">Buscar</button></form>
+    <form class="busca" id="fbusca"><input name="q" value="${esc(termo)}" placeholder="SN, TAG de rastreio, TAG CEDAE ou local (ex.: B01, B01-EAD1, XV-049)" autocomplete="off" enterkeyhint="search"><button class="bt pri">Buscar</button></form>
     <div class="chips">${chips.map(([k,l]) => `<button class="chip ${filtroBusca === k ? 'on' : ''}" data-chip="${k}">${l}</button>`).join('')}</div>
     ${posicoesAchadas.length ? `<h2>Posições (${posicoesAchadas.length})</h2><div class="lista">${posicoesAchadas.map(p => `<a class="li" href="#/f/${esc(p.galeria)}/${p.filtro_numero}"><div style="flex:1"><b class="mono">${esc(p.tag_local)}</b> · ${esc(p.descricao)}</div><span class="sub">${p.tipos_previstos.length - p.tipos_pendentes.length}/${p.tipos_previstos.length}</span></a>`).join('')}</div>` : ''}
     ${(limpo || filtroBusca !== 'todos') ? `<h2>Equipamentos (${resultado.length}${resultado.length === 300 ? '+' : ''})</h2>
@@ -859,7 +867,7 @@ async function telaRelatorio() {
     [eqRecorte.filter(e => e.sn_pendente).length, 'SN pendente'],
     [eqRecorte.reduce((n, e) => n + Number(e.ocorrencias_agua || 0), 0), 'Ocorr. de água']
   ];
-  const descFiltros = [pr.g && 'Galeria ' + pr.g, pr.f && 'Filtro F' + String(pr.f).padStart(2,'0'), pr.tipo && tipoNome(pr.tipo),
+  const descFiltros = [pr.g && 'Galeria ' + pr.g, pr.f && 'Filtro ' + (pr.g || '') + String(pr.f).padStart(2,'0'), pr.tipo && tipoNome(pr.tipo),
     pr.fab, pr.sit && (pr.modo === 'posicao' ? SIT_POS[pr.sit]?.[0] : (stInfo(pr.sit).nome !== pr.sit ? stInfo(pr.sit).nome : opsSit.find(o => o[0] === pr.sit)?.[1]))]
     .filter(Boolean).join(' · ') || 'Todos os registros';
 
@@ -900,12 +908,20 @@ async function telaRelatorio() {
       <div class="filtros-rel">
         ${sel('modo', 'Relatório por', [['posicao','Posição (conjunto)'],['equipamento','Equipamento (peça)']])}
         ${sel('g', 'Galeria', [['','Todas'], ...galerias.map(g => [g, 'Galeria ' + g])])}
-        ${sel('f', 'Filtro', [['','Todos'], ...filtrosN.map(n => [String(n), 'F' + String(n).padStart(2,'0')])])}
+        ${sel('f', 'Filtro', [['','Todos'], ...filtrosN.map(n => [String(n), (pr.g || 'Filtro ') + String(n).padStart(2,'0')])])}
         ${sel('tipo', 'Tipo', [['','Todos'], ...S.ref.tipos.map(t => [t.codigo, t.nome])])}
         ${sel('fab', 'Fabricante', [['','Todos'], ...S.ref.fabricantes.map(f => [f.nome, f.nome])])}
         ${sel('sit', pr.modo === 'posicao' ? 'Situação' : 'Status', opsSit)}
         ${sel('folha', 'Folha do PDF', [['paisagem','Deitada (recomendado)'],['retrato','Em pé']])}
       </div>
+      <details class="assin-ed"${S.assinAberto ? ' open' : ''}><summary>Assinaturas do PDF (${assinaturas().filter(x => x.cargo.trim()).length})</summary>
+        <div class="sub" style="margin-top:6px">Até 4 campos. Deixe o cargo em branco para não imprimir aquele campo. Fica guardado neste navegador.</div>
+        <div class="lin4">${assinaturas().map((x, i) => `<div>
+          <label class="sub">Cargo / função ${i + 1}</label><input data-assin="${i}" data-campo="cargo" value="${esc(x.cargo)}" placeholder="Ex.: Supervisor de montagem">
+          <label class="sub" style="display:block;margin-top:6px">Nome (opcional)</label><input data-assin="${i}" data-campo="nome" value="${esc(x.nome)}" placeholder="Deixe em branco para assinar à mão">
+        </div>`).join('')}</div>
+        <div style="margin-top:10px"><button type="button" class="bt peq" data-assin-padrao>Restaurar padrão</button></div>
+      </details>
     </div>
     <div class="so-impressao rel-cab">
       <div><h1>Relatório Consolidado de Equipamentos</h1>
@@ -917,8 +933,23 @@ async function telaRelatorio() {
     <div class="so-impressao" style="font-weight:700;font-size:12px;margin-bottom:6px">2. Relação detalhada — ${linhas.length} ${pr.modo === 'posicao' ? 'posições' : 'equipamentos'}</div>
     <div class="sub nao-imprimir" style="margin-bottom:6px">${linhas.length} ${pr.modo === 'posicao' ? 'posições' : 'equipamentos'} · ${esc(descFiltros)}</div>
     <div class="rel-wrap">${linhas.length ? tabela : '<div class="vazio">Nenhum registro com esses filtros.</div>'}</div>
-    <div class="so-impressao assin"><div>Responsável técnico — Equipamentos</div><div>Engenharia / Liderança</div></div>`);
+    ${(() => { const a = assinaturas().filter(x => x.cargo.trim());
+      return a.length ? `<div class="so-impressao assin" style="--n:${a.length}">${a.map(x => `<div>${x.nome.trim() ? `<b>${esc(x.nome)}</b>` : '<b>&nbsp;</b>'}${esc(x.cargo)}<div class="dt">Data: ____/____/______</div></div>`).join('')}</div>` : ''; })()}`);
 }
+const ASSIN_PADRAO = [
+  { cargo: 'Supervisor da equipe de montagem', nome: '' },
+  { cargo: 'Qualidade', nome: '' },
+  { cargo: 'Gerente', nome: '' },
+  { cargo: '', nome: '' },
+];
+function assinaturas() {
+  try {
+    const v = JSON.parse(localStorage.getItem('rastreio_assinaturas') || 'null');
+    if (Array.isArray(v) && v.length === 4) return v.map(x => ({ cargo: String(x.cargo || ''), nome: String(x.nome || '') }));
+  } catch (e) {}
+  return ASSIN_PADRAO.map(x => ({ ...x }));
+}
+function salvarAssinaturas(lista) { try { localStorage.setItem('rastreio_assinaturas', JSON.stringify(lista)); } catch (e) {} }
 function definirFolha(folha) {
   let st = document.getElementById('estilo-folha');
   if (!st) { st = document.createElement('style'); st.id = 'estilo-folha'; document.head.appendChild(st); }
@@ -1029,9 +1060,10 @@ async function rotear() {
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv]');
+  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao]');
   if (!t) return;
   if ('pdf' in t.dataset) return window.print();
+  if ('assinPadrao' in t.dataset) { salvarAssinaturas(ASSIN_PADRAO.map(x => ({ ...x }))); return rotear(); }
   if ('csv' in t.dataset) return exportarCSV();
   if (t.dataset.ir) location.hash = t.dataset.ir;
   else if (t.dataset.registrar) abrirRegistrar(t.dataset.registrar).catch(e => toast(msgErro(e)));
@@ -1051,6 +1083,17 @@ document.addEventListener('click', async ev => {
       });
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.dataset?.ir) location.hash = ev.target.dataset.ir; });
+document.addEventListener('input', ev => {
+  const a = ev.target.closest('[data-assin]'); if (!a) return;
+  const lista = assinaturas(); lista[Number(a.dataset.assin)][a.dataset.campo] = a.value; salvarAssinaturas(lista);
+  const n = lista.filter(x => x.cargo.trim()).length;
+  const sum = document.querySelector('.assin-ed summary'); if (sum) sum.textContent = `Assinaturas do PDF (${n})`;
+  const bloco = document.querySelector('.so-impressao.assin');
+  const html = lista.filter(x => x.cargo.trim()).map(x => `<div>${x.nome.trim() ? `<b>${esc(x.nome)}</b>` : '<b>&nbsp;</b>'}${esc(x.cargo)}<div class="dt">Data: ____/____/______</div></div>`).join('');
+  if (bloco) { bloco.innerHTML = html; bloco.style.setProperty('--n', n); bloco.classList.toggle('hide', !n); }
+  else if (n) { const wrap = document.querySelector('.rel-wrap'); if (wrap) wrap.insertAdjacentHTML('afterend', `<div class="so-impressao assin" style="--n:${n}">${html}</div>`); }
+});
+document.addEventListener('toggle', ev => { if (ev.target.classList?.contains('assin-ed')) S.assinAberto = ev.target.open; }, true);
 document.addEventListener('change', async ev => {
   const rf = ev.target.closest('[data-relf]');
   if (rf) {
