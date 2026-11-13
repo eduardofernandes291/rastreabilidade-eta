@@ -142,6 +142,58 @@ fieldset.pc legend{font-weight:700;padding:0 6px}
 .info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:10px 12px;border-radius:10px;font-size:13px;margin-bottom:12px}
 #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--head);color:#fff;padding:11px 18px;border-radius:12px;font-size:14px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:92vw}
 .carregando{padding:40px;text-align:center;color:var(--ink2)}
+/* relatório */
+.filtros-rel{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 10px;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:12px 0}
+.filtros-rel .campo{margin:0}
+.filtros-rel .campo select{padding:7px 10px}
+.rel-wrap{background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:auto}
+table.rel{width:100%;border-collapse:collapse;font-size:12.5px}
+table.rel th{background:var(--head);color:#fff;text-align:left;padding:7px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;position:sticky;top:0}
+table.rel td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+table.rel tr:nth-child(even) td{background:#f8fafc}
+table.rel .sn{font:600 12.5px var(--mono);white-space:nowrap}
+table.rel .s{display:block;font-size:10.5px;color:var(--ink2);white-space:nowrap}
+table.rel .s i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;background:var(--c)}
+table.rel .fl{color:var(--ink3);font-style:italic}
+table.rel .s.sit{font-size:12px;color:var(--ink)}
+.so-impressao{display:none!important}
+.rel-cab{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--head);padding-bottom:8px;margin-bottom:10px}
+.rel-cab h1{font-size:18px;margin:0}
+.rel-cab .meta{font-size:11px;color:var(--ink2);text-align:right}
+.rel-kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:8px 0 14px}
+.rel-kpis div{border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.rel-kpis b{display:block;font-size:17px}
+.rel-kpis span{font-size:10px;color:var(--ink2);text-transform:uppercase}
+.assin{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:46px;font-size:11px;text-align:center;color:var(--ink2)}
+.assin div{border-top:1px solid var(--ink);padding-top:6px}
+@media (max-width:760px){.rel-kpis{grid-template-columns:repeat(2,1fr)}}
+@media print{
+  @page{size:A4 landscape;margin:9mm}
+  html,body{background:#fff!important;font-size:11px}
+  .so-impressao.rel-cab{display:flex!important}
+  .so-impressao.assin{display:grid!important}
+  header.top,nav.baixo,.nao-imprimir,#toast{display:none!important}
+  main{max-width:none;padding:0!important}
+  .so-impressao{display:block!important}
+  .rel-wrap{border:0;overflow:visible}
+  table.rel{font-size:9.5px}
+  table.rel th{position:static;background:#0f172a!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.5px;padding:5px 6px}
+  table.rel td{padding:4px 6px}
+  table.rel .sn{font-size:9.5px}
+  table.rel .s.sit{font-size:9.5px}
+  table.rel tr{break-inside:avoid}
+  table.rel tr:nth-child(even) td,.rel-kpis div,table.rel .s i{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rel-kpis b{font-size:14px}
+  body.retrato table.rel .rx{display:none}
+  body.retrato table.rel{font-size:8.5px}
+  body.retrato table.rel th{font-size:7.5px;padding:4px 4px}
+  body.retrato table.rel td{padding:3px 4px}
+  body.retrato table.rel .sn{font-size:8.5px}
+  body.retrato table.rel .s{font-size:7.5px}
+  body.retrato table.rel .s.sit{font-size:8.5px}
+  body.retrato .rel-kpis{grid-template-columns:repeat(4,1fr)}
+  body.retrato .rel-cab h1{font-size:15px}
+}
 /* login */
 .login{min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(160deg,#0f172a,#1e3a8a)}
 .login form{background:#fff;border-radius:18px;padding:26px 24px;width:100%;max-width:380px}
@@ -163,7 +215,7 @@ table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
    ===================================================================== */
 const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
-const VERSAO = 'v0.2 · Etapa 2';
+const VERSAO = 'v0.3 · Relatório consolidado';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -242,7 +294,7 @@ async function carregarPosicoes(forcar) {
 async function carregarEquip(forcar) {
   if (S.equip && !forcar) return S.equip;
   S.equip = await buscarTodos(() => sb.from('vw_equipamentos')
-    .select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,situacao_sn,fabricante,status_codigo,posicao_id,tag_local,galeria,filtro,posicao_descricao,ocorrencias_abertas')
+    .select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,situacao_sn,fabricante,modelo,status_codigo,posicao_id,tag_local,tag_consorcio,galeria,filtro,posicao_descricao,instalado_em,total_ocorrencias,ocorrencias_abertas,ocorrencias_agua,garantia_ate,nota_fiscal')
     .order('tag_rastreio', { ascending:true }));
   return S.equip;
 }
@@ -265,7 +317,7 @@ const barra = pct => `<div class="barra"><i style="width:${pct}%"></i></div>`;
    ===================================================================== */
 function moldura(ativo, conteudo) {
   const obra = S.ref.obras[0];
-  const links = [['#/','Painel','▦','painel'],['#/g/A','Filtros','◫','filtros'],['#/busca','Buscar','⌕','busca'],['#/estoque','Estoque','▤','estoque'],['#/conta','Conta','◉','conta']];
+  const links = [['#/','Painel','▦','painel'],['#/g/A','Filtros','◫','filtros'],['#/busca','Buscar','⌕','busca'],['#/estoque','Estoque','▤','estoque'],['#/relatorio','Relatório','▣','relatorio'],['#/conta','Conta','◉','conta']];
   return `
   <header class="top">
     <div class="marca">Rastreabilidade de Equipamentos<small>${esc(obra?.nome || '')}</small></div>
@@ -737,6 +789,149 @@ function abrirReceber() {
     });
 }
 
+/* ---------- relatório consolidado ---------- */
+function situacaoPos(p) {
+  const st = ['valvula','atuador','redutor'].map(k => p[k + '_status']).filter(Boolean);
+  if (st.some(x => DEFEITO.includes(x))) return 'DEFEITO';
+  if (p.tipos_pendentes.length) return st.length ? 'INCOMPLETA' : 'VAZIA';
+  if (Number(p.pecas_sem_sn) > 0) return 'SEM_SN';
+  if (st.every(x => x === 'EM_OPERACAO')) return 'OPERACAO';
+  return 'INSTALADA';
+}
+const SIT_POS = {
+  OPERACAO:['Em operação','#16a34a'], INSTALADA:['Instalada — não comissionada','#0ea5e9'], SEM_SN:['Completa — SN pendente','#d97706'],
+  INCOMPLETA:['Incompleta','#94a3b8'], VAZIA:['Sem peças','#cbd5e1'], DEFEITO:['Com defeito','#dc2626']
+};
+function parametrosRel() {
+  const u = new URLSearchParams(location.hash.split('?')[1] || '');
+  return { modo: u.get('modo') || 'posicao', g: u.get('g') || '', f: u.get('f') || '', tipo: u.get('tipo') || '',
+           sit: u.get('sit') || '', fab: u.get('fab') || '', folha: u.get('folha') || 'paisagem' };
+}
+function dadosRelatorio(pr, pos, eq) {
+  if (pr.modo === 'posicao') {
+    return pos.filter(p => (!pr.g || p.galeria === pr.g) && (!pr.f || String(p.filtro_numero) === pr.f)
+      && (!pr.sit || situacaoPos(p) === pr.sit)
+      && (!pr.tipo || p.tipos_previstos.includes(pr.tipo))
+      && (!pr.fab || ['valvula','atuador','redutor'].some(k => p[k + '_fabricante'] === pr.fab)));
+  }
+  return eq.filter(e => (!pr.g || e.galeria === pr.g) && (!pr.f || Number(String(e.filtro || '').replace(/\D/g,'')) === Number(pr.f))
+    && (!pr.tipo || e.tipo_codigo === pr.tipo) && (!pr.fab || e.fabricante === pr.fab)
+    && (!pr.sit || (pr.sit === 'SN_PENDENTE' ? e.sn_pendente : pr.sit === 'FORA' ? !e.posicao_id : e.status_codigo === pr.sit)))
+    .sort((a, b) => String(a.tag_local || 'ZZZ').localeCompare(String(b.tag_local || 'ZZZ')) || a.tag_rastreio.localeCompare(b.tag_rastreio));
+}
+async function telaRelatorio() {
+  const pr = parametrosRel();
+  const [pos, eq] = await Promise.all([carregarPosicoes(), carregarEquip()]);
+  const linhas = dadosRelatorio(pr, pos, eq);
+  definirFolha(pr.folha);
+  const galerias = [...new Set(pos.filter(p => p.galeria).map(p => p.galeria))];
+  const filtrosN = [...new Set(pos.filter(p => !pr.g || p.galeria === pr.g).map(p => p.filtro_numero).filter(Boolean))].sort((a,b) => a - b);
+  const sel = (nome, rot, ops) => `<div class="campo"><label>${rot}</label><select data-relf="${nome}">${ops.map(([v,l]) => `<option value="${esc(v)}" ${String(pr[nome]) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+  const opsSit = pr.modo === 'posicao'
+    ? [['','Todas'], ...Object.entries(SIT_POS).map(([k,[l]]) => [k, l])]
+    : [['','Todos'], ...S.ref.status.map(s => [s.codigo, s.nome]), ['SN_PENDENTE','SN pendente'], ['FORA','Fora de posição']];
+
+  // resumo quantitativo (sobre o recorte de galeria/filtro)
+  const recorte = pos.filter(p => (!pr.g || p.galeria === pr.g) && (!pr.f || String(p.filtro_numero) === pr.f));
+  const idsRecorte = new Set(recorte.map(p => p.posicao_id));
+  const eqRecorte = eq.filter(e => (!pr.g && !pr.f) || idsRecorte.has(e.posicao_id));
+  const r = resumoPos(recorte);
+  const kp = [
+    [recorte.length, 'Posições'], [`${r.inst}/${r.prev}`, 'Peças instaladas'], [`${r.pct}%`, 'Cobertura'],
+    [eqRecorte.filter(e => e.status_codigo === 'EM_OPERACAO').length, 'Em operação'],
+    [eqRecorte.filter(e => DEFEITO.includes(e.status_codigo)).length, 'Defeito / manutenção'],
+    [eqRecorte.filter(e => e.sn_pendente).length, 'SN pendente'],
+    [eqRecorte.reduce((n, e) => n + Number(e.ocorrencias_agua || 0), 0), 'Ocorr. de água']
+  ];
+  const descFiltros = [pr.g && 'Galeria ' + pr.g, pr.f && 'Filtro F' + String(pr.f).padStart(2,'0'), pr.tipo && tipoNome(pr.tipo),
+    pr.fab, pr.sit && (pr.modo === 'posicao' ? SIT_POS[pr.sit]?.[0] : (stInfo(pr.sit).nome !== pr.sit ? stInfo(pr.sit).nome : opsSit.find(o => o[0] === pr.sit)?.[1]))]
+    .filter(Boolean).join(' · ') || 'Todos os registros';
+
+  const celPeca = (p, k) => {
+    if (!p.tipos_previstos.includes(k.toUpperCase())) return '<td class="fl">n/a</td>';
+    if (!p[k + '_id']) return '<td class="fl">não instalado</td>';
+    const s = stInfo(p[k + '_status']);
+    return `<td><span class="sn">${p[k + '_sn'] ? esc(p[k + '_sn']) : 'SN pendente'}</span><span class="s"><i style="--c:${esc(s.cor)}"></i>${esc(s.nome)}</span></td>`;
+  };
+  const tabela = pr.modo === 'posicao' ? `
+    <table class="rel"><thead><tr><th class="rx">Gal.</th><th class="rx">Filtro</th><th>Item</th><th>Posição</th><th>TAG local</th><th class="rx">TAG consórcio</th>
+      <th>Válvula (SN)</th><th>Atuador (SN)</th><th>Redutor (SN)</th><th>Situação</th><th>Ocorr.</th></tr></thead><tbody>
+    ${linhas.map(p => { const [sl, sc] = SIT_POS[situacaoPos(p)]; return `<tr>
+      <td class="rx">${esc(p.galeria || '—')}</td><td class="rx">${esc(p.filtro || '—')}</td><td>${esc(p.item ?? '')}</td><td>${esc(p.descricao)}${p.nivel === 'SUPERIOR' ? ' <span class="s">galeria superior</span>' : ''}</td>
+      <td class="sn">${esc(p.tag_local)}</td><td class="rx">${esc(p.tag_consorcio || '—')}</td>
+      ${celPeca(p,'valvula')}${celPeca(p,'atuador')}${celPeca(p,'redutor')}
+      <td><span class="s sit"><i style="--c:${sc}"></i>${sl}</span>${p.tipos_pendentes.length && p.tipos_pendentes.length < p.tipos_previstos.length ? `<span class="s">falta: ${esc(p.tipos_pendentes.map(tipoNome).join(', '))}</span>` : ''}</td>
+      <td>${Number(p.ocorrencias_abertas) || '—'}</td></tr>`; }).join('')}
+    </tbody></table>` : `
+    <table class="rel"><thead><tr><th>TAG rastreio</th><th>Tipo</th><th>Fabricante / modelo</th><th>SN</th><th>Localização</th><th class="rx">TAG consórcio</th>
+      <th>Status</th><th>Instalado em</th><th>Ocorr. (água)</th><th>NF</th></tr></thead><tbody>
+    ${linhas.map(e => { const s = stInfo(e.status_codigo); return `<tr>
+      <td class="sn">${esc(e.tag_rastreio)}</td><td>${esc(tipoNome(e.tipo_codigo))}</td><td>${esc(e.fabricante)}${e.modelo ? '<span class="s">' + esc(e.modelo) + '</span>' : ''}</td>
+      <td class="sn">${e.numero_serie ? esc(e.numero_serie) : '<span class="fl">' + esc(SITUACAO_SN[e.situacao_sn] || 'pendente') + '</span>'}</td>
+      <td>${e.tag_local ? `<span class="sn">${esc(e.tag_local)}</span><span class="s">${esc(e.posicao_descricao || '')}</span>` : '<span class="fl">fora de posição</span>'}</td>
+      <td class="rx">${esc(e.tag_consorcio || '—')}</td>
+      <td><span class="s sit"><i style="--c:${esc(s.cor)}"></i>${esc(s.nome)}</span></td>
+      <td>${e.instalado_em ? fmtD(e.instalado_em) : '—'}</td><td>${e.total_ocorrencias ? `${e.total_ocorrencias} (${e.ocorrencias_agua})` : '—'}</td><td>${esc(e.nota_fiscal || '—')}</td></tr>`; }).join('')}
+    </tbody></table>`;
+
+  S.ultimoRel = { pr, linhas, descFiltros };
+  const obra = S.ref.obras[0];
+  return moldura('relatorio', `
+    <div class="nao-imprimir">
+      <div class="linha"><h1>Relatório consolidado</h1><span class="esp"></span>
+        <button class="bt" data-csv>⬇ Excel (CSV)</button><button class="bt pri" data-pdf>🖨 Gerar PDF</button></div>
+      <div class="sub">Escolha os filtros; o PDF e o Excel saem exatamente com o que está na tela.</div>
+      <div class="filtros-rel">
+        ${sel('modo', 'Relatório por', [['posicao','Posição (conjunto)'],['equipamento','Equipamento (peça)']])}
+        ${sel('g', 'Galeria', [['','Todas'], ...galerias.map(g => [g, 'Galeria ' + g])])}
+        ${sel('f', 'Filtro', [['','Todos'], ...filtrosN.map(n => [String(n), 'F' + String(n).padStart(2,'0')])])}
+        ${sel('tipo', 'Tipo', [['','Todos'], ...S.ref.tipos.map(t => [t.codigo, t.nome])])}
+        ${sel('fab', 'Fabricante', [['','Todos'], ...S.ref.fabricantes.map(f => [f.nome, f.nome])])}
+        ${sel('sit', pr.modo === 'posicao' ? 'Situação' : 'Status', opsSit)}
+        ${sel('folha', 'Folha do PDF', [['paisagem','Deitada (recomendado)'],['retrato','Em pé']])}
+      </div>
+    </div>
+    <div class="so-impressao rel-cab">
+      <div><h1>Relatório Consolidado de Equipamentos</h1>
+        <div class="sub">${esc(obra?.nome || '')} · Rastreabilidade de válvulas, atuadores e redutores</div></div>
+      <div class="meta">Emitido em ${fmtDH(new Date().toISOString())}<br>por ${esc(S.perfil.nome)}<br>Filtros: ${esc(descFiltros)}</div>
+    </div>
+    <div class="so-impressao" style="font-weight:700;font-size:12px">1. Resumo quantitativo</div>
+    <div class="rel-kpis">${kp.map(([n,l]) => `<div><b>${n}</b><span>${l}</span></div>`).join('')}</div>
+    <div class="so-impressao" style="font-weight:700;font-size:12px;margin-bottom:6px">2. Relação detalhada — ${linhas.length} ${pr.modo === 'posicao' ? 'posições' : 'equipamentos'}</div>
+    <div class="sub nao-imprimir" style="margin-bottom:6px">${linhas.length} ${pr.modo === 'posicao' ? 'posições' : 'equipamentos'} · ${esc(descFiltros)}</div>
+    <div class="rel-wrap">${linhas.length ? tabela : '<div class="vazio">Nenhum registro com esses filtros.</div>'}</div>
+    <div class="so-impressao assin"><div>Responsável técnico — Equipamentos</div><div>Engenharia / Liderança</div></div>`);
+}
+function definirFolha(folha) {
+  let st = document.getElementById('estilo-folha');
+  if (!st) { st = document.createElement('style'); st.id = 'estilo-folha'; document.head.appendChild(st); }
+  st.textContent = `@page{size:A4 ${folha === 'retrato' ? 'portrait' : 'landscape'};margin:9mm}`;
+  document.body.classList.toggle('retrato', folha === 'retrato');
+}
+function exportarCSV() {
+  const { pr, linhas, descFiltros } = S.ultimoRel;
+  const peca = (p, k) => !p.tipos_previstos.includes(k.toUpperCase()) ? ['n/a',''] : !p[k + '_id'] ? ['não instalado',''] : [p[k + '_sn'] || 'SN pendente', stInfo(p[k + '_status']).nome];
+  const cab = pr.modo === 'posicao'
+    ? ['Galeria','Filtro','Item','Posição','Nível','TAG local','TAG consórcio','Válvula SN','Válvula status','Válvula fabricante','Atuador SN','Atuador status','Atuador fabricante','Redutor SN','Redutor status','Redutor fabricante','Situação','Falta','Ocorrências abertas']
+    : ['TAG rastreio','Tipo','Fabricante','Modelo','SN','Situação SN','TAG local','Posição','TAG consórcio','Status','Instalado em','Ocorrências','Ocorrências de água','Nota fiscal','Garantia até'];
+  const rows = linhas.map(x => pr.modo === 'posicao'
+    ? [x.galeria, x.filtro, x.item, x.descricao, x.nivel, x.tag_local, x.tag_consorcio,
+       ...peca(x,'valvula'), x.valvula_fabricante, ...peca(x,'atuador'), x.atuador_fabricante, ...peca(x,'redutor'), x.redutor_fabricante,
+       SIT_POS[situacaoPos(x)][0], x.tipos_pendentes.map(tipoNome).join(', '), x.ocorrencias_abertas]
+    : [x.tag_rastreio, tipoNome(x.tipo_codigo), x.fabricante, x.modelo, x.numero_serie, x.numero_serie ? 'Informado' : (SITUACAO_SN[x.situacao_sn] || 'Pendente'),
+       x.tag_local, x.posicao_descricao, x.tag_consorcio, stInfo(x.status_codigo).nome, x.instalado_em ? fmtD(x.instalado_em) : '',
+       x.total_ocorrencias, x.ocorrencias_agua, x.nota_fiscal, x.garantia_ate ? fmtD(x.garantia_ate) : '']);
+  const cel = v => { const t = String(v ?? ''); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+  const txt = [[`Relatório consolidado de equipamentos — ${S.ref.obras[0]?.nome || ''}`], [`Emitido em ${fmtDH(new Date().toISOString())} por ${S.perfil.nome} — Filtros: ${descFiltros}`], [], cab, ...rows]
+    .map(r => r.map(cel).join(';')).join('\r\n');
+  const blob = new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `relatorio_${pr.modo}_${hoje()}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast('Planilha gerada — abre direto no Excel.');
+}
+
 /* ---------- conta ---------- */
 async function telaConta() {
   if (admin()) S.ref.perfis = await q(sb.from('perfis').select('*').order('nome'));
@@ -806,6 +1001,7 @@ async function rotear() {
     else if (partes[0] === 'busca') html = await telaBusca();
     else if (partes[0] === 'estoque') html = await telaEstoque();
     else if (partes[0] === 'conta') html = await telaConta();
+    else if (partes[0] === 'relatorio') html = await telaRelatorio();
     else html = await telaPainel();
     app.innerHTML = html;
     window.scrollTo(0, 0);
@@ -817,8 +1013,10 @@ async function rotear() {
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair]');
+  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv]');
   if (!t) return;
+  if ('pdf' in t.dataset) return window.print();
+  if ('csv' in t.dataset) return exportarCSV();
   if (t.dataset.ir) location.hash = t.dataset.ir;
   else if (t.dataset.registrar) abrirRegistrar(t.dataset.registrar).catch(e => toast(msgErro(e)));
   else if (t.dataset.acao && equipAtual) acoesEquip(t.dataset.acao, equipAtual);
@@ -838,6 +1036,14 @@ document.addEventListener('click', async ev => {
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.dataset?.ir) location.hash = ev.target.dataset.ir; });
 document.addEventListener('change', async ev => {
+  const rf = ev.target.closest('[data-relf]');
+  if (rf) {
+    const pr = parametrosRel(); pr[rf.dataset.relf] = rf.value;
+    if (rf.dataset.relf === 'modo') pr.sit = '';
+    if (rf.dataset.relf === 'g') pr.f = '';
+    const u = new URLSearchParams(Object.entries(pr).filter(([, v]) => v));
+    location.hash = '#/relatorio?' + u.toString(); return;
+  }
   const s = ev.target.closest('[data-papel]'); if (!s) return;
   try { await q(sb.from('perfis').update({ papel: s.value }).eq('user_id', s.dataset.papel).select('user_id').single()); toast('Papel atualizado.'); }
   catch (e) { toast(msgErro(e)); rotear(); }
