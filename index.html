@@ -29,7 +29,7 @@ nav.baixo{display:none}
 @media (max-width:760px){
   header.top nav{display:none}
   nav.baixo{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:20;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-  nav.baixo a{flex:1;text-align:center;padding:9px 2px 7px;font-size:11px;color:var(--ink2)}
+  nav.baixo a{flex:1;text-align:center;padding:9px 1px 7px;font-size:10.5px;color:var(--ink2);min-width:0;white-space:nowrap;overflow:hidden}
   nav.baixo a b{display:block;font-size:18px;line-height:1.1}
   nav.baixo a.on{color:var(--acc)}
   main{padding-bottom:80px!important}
@@ -142,6 +142,24 @@ fieldset.pc legend{font-weight:700;padding:0 6px}
 .info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:10px 12px;border-radius:10px;font-size:13px;margin-bottom:12px}
 #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--head);color:#fff;padding:11px 18px;border-radius:12px;font-size:14px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:92vw}
 .carregando{padding:40px;text-align:center;color:var(--ink2)}
+/* ocorrências e fotos */
+.oc{background:#fff;border:1px solid var(--line);border-left:4px solid var(--c,#f59e0b);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}
+.oc.encerrada{--c:#16a34a;opacity:.92}
+.oc .oc-cab{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.oc .oc-cod{font:600 13px var(--mono);color:var(--ink2)}
+.oc .oc-tit{font-weight:700;margin:4px 0 2px}
+.oc .oc-txt{font-size:14px;white-space:pre-wrap}
+.oc .oc-acao{font-size:13px;background:#f0fdf4;border-radius:8px;padding:6px 9px;margin-top:6px;white-space:pre-wrap}
+.grav-BAIXA{background:#f1f5f9!important;color:#475569!important}.grav-MEDIA{background:#fef3c7!important;color:#92400e!important}
+.grav-ALTA{background:#fee2e2!important;color:#b91c1c!important}.grav-CRITICA{background:#7f1d1d!important;color:#fff!important}
+.fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:8px}
+.fotos a{display:block;aspect-ratio:1;border-radius:9px;overflow:hidden;border:1px solid var(--line);background:#f8fafc;position:relative}
+.fotos img{width:100%;height:100%;object-fit:cover;display:block}
+.fotos .doc{display:grid;place-items:center;height:100%;font-size:12px;color:var(--ink2);text-align:center;padding:6px}
+.fotos .leg{position:absolute;left:0;right:0;bottom:0;background:rgba(15,23,42,.65);color:#fff;font-size:10px;padding:2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prev-fotos{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.prev-fotos img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.medidor{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
 /* relatório */
 .filtros-rel{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 10px;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:12px 0}
 .filtros-rel .campo{margin:0}
@@ -223,7 +241,7 @@ table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
    ===================================================================== */
 const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
-const VERSAO = 'v0.6 · Emitido por, ocorrências e posições vazias';
+const VERSAO = 'v0.7 · Ocorrências, fotos, substituição e backup';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -325,7 +343,8 @@ const barra = pct => `<div class="barra"><i style="width:${pct}%"></i></div>`;
    ===================================================================== */
 function moldura(ativo, conteudo) {
   const obra = S.ref.obras[0];
-  const links = [['#/','Painel','▦','painel'],['#/g/A','Filtros','◫','filtros'],['#/busca','Buscar','⌕','busca'],['#/estoque','Estoque','▤','estoque'],['#/relatorio','Relatório','▣','relatorio'],['#/conta','Conta','◉','conta']];
+  const links = [['#/','Painel','▦','painel','Painel'],['#/g/A','Filtros','◫','filtros','Filtros'],['#/busca','Buscar','⌕','busca','Buscar'],
+    ['#/ocorrencias','Ocorrências','⚠','ocorrencias','Ocorr.'],['#/estoque','Estoque','▤','estoque','Estoque'],['#/relatorio','Relatório','▣','relatorio','Relat.'],['#/conta','Conta','◉','conta','Conta']];
   return `
   <header class="top">
     <div class="marca">Rastreabilidade de Equipamentos<small>${esc(obra?.nome || '')}</small></div>
@@ -333,7 +352,7 @@ function moldura(ativo, conteudo) {
     <span class="papel" title="${esc(S.perfil.nome)}">${esc(S.perfil.papel)}</span>
   </header>
   <main>${conteudo}</main>
-  <nav class="baixo">${links.map(l => `<a href="${l[0]}" class="${ativo === l[3] ? 'on' : ''}"><b>${l[2]}</b>${l[1]}</a>`).join('')}</nav>`;
+  <nav class="baixo">${links.map(l => `<a href="${l[0]}" class="${ativo === l[3] ? 'on' : ''}"><b>${l[2]}</b>${l[4]}</a>`).join('')}</nav>`;
 }
 
 /* ---------- login ---------- */
@@ -360,7 +379,8 @@ function telaLogin(erro) {
 
 /* ---------- painel ---------- */
 async function telaPainel() {
-  const [pos, eq] = await Promise.all([carregarPosicoes(), carregarEquip()]);
+  const [pos, eq, oc] = await Promise.all([carregarPosicoes(), carregarEquip(), q(sb.from('ocorrencias').select('id').neq('situacao', 'ENCERRADA'))]);
+  S.ocAbertas = oc.length;
   const r = resumoPos(pos);
   const conta = (tipo) => {
     const prev = pos.filter(p => p.tipos_previstos.includes(tipo)).length;
@@ -384,6 +404,7 @@ async function telaPainel() {
       ${kpi(defeito.length, null, 'Com defeito / aguardando manutenção', defeito.length ? 'alerta' : '')}
       ${kpi(semSn.length, null, 'Peças com SN pendente', semSn.length ? 'aviso' : '')}
       ${kpi(estoque.length, null, 'Peças fora de posição (estoque)')}
+      <a href="#/ocorrencias" style="color:inherit">${kpi(S.ocAbertas ?? 0, null, 'Ocorrências abertas', S.ocAbertas ? 'aviso' : '')}</a>
     </div>
     ${defeito.length ? `<h2>Peças com defeito</h2><div class="lista">${defeito.slice(0, 15).map(linhaEquip).join('')}</div>` : ''}
     <h2>Galerias</h2>
@@ -559,11 +580,15 @@ async function abrirRegistrar(posId) {
 
 /* ---------- dossiê do equipamento ---------- */
 async function telaEquip(id) {
-  const [e, hist, aud] = await Promise.all([
+  const [e, hist, aud, ocs, anx] = await Promise.all([
     q(sb.from('vw_equipamentos').select('*').eq('id', id).maybeSingle()),
     q(sb.from('vw_historico').select('*').eq('equipamento_id', id).order('data', { ascending:false })),
     q(sb.from('auditoria').select('em,usuario_id,acao,alterados,antes,depois').eq('tabela', 'equipamentos').eq('registro_id', id).order('em', { ascending:false }).limit(50)),
+    q(sb.from('vw_ocorrencias').select('*').eq('equipamento_id', id).order('data_ocorrencia', { ascending:false })),
+    q(sb.from('anexos').select('*').eq('equipamento_id', id).order('criado_em', { ascending:true })),
   ]);
+  const urls = await urlsAnexos(anx);
+  S.ocsAtual = ocs;
   if (!e) return moldura('busca', '<div class="vazio">Equipamento não encontrado.</div>');
   equipAtual = e;
   const tp = S.ref.tipos.find(t => t.codigo === e.tipo_codigo);
@@ -583,6 +608,11 @@ async function telaEquip(id) {
       <button class="bt peq" data-acao="dados">Editar dados</button>
       ${e.posicao_id && e.instalacao_data_estimada ? `<button class="bt peq" data-acao="data">Informar data real de instalação</button>` : ''}
       ${e.posicao_id ? `<button class="bt peq per" data-acao="retirar">Retirar da posição</button>` : ''}
+    </div>
+    <div class="linha" style="margin:-4px 0 14px">
+      <button class="bt pri peq" data-acao="ocorrencia">⚠ Registrar ocorrência</button>
+      ${e.posicao_id ? `<button class="bt pri peq" data-acao="substituir">⇄ Substituir peça</button>` : ''}
+      <button class="bt peq" data-acao="anexar">📷 Anexar foto / documento</button>
     </div>` : ''}
     <h2>Identificação</h2>
     <dl class="ficha" style="margin:0">
@@ -592,7 +622,7 @@ async function telaEquip(id) {
       ${campo('Localização atual', loc)}
       ${e.tag_consorcio ? campo('TAG CEDAE', esc(e.tag_consorcio)) : ''}
       ${e.instalado_em ? campo('Instalado desde', fmtD(e.instalado_em) + (e.instalacao_data_estimada ? ' <span class="tg warn">data estimada</span>' : '')) : ''}
-      ${campo('Ocorrências', `${e.total_ocorrencias} (${e.ocorrencias_abertas} abertas${e.ocorrencias_agua ? `, ${e.ocorrencias_agua} de água` : ''})`)}
+      ${campo('Ocorrências', `${e.total_ocorrencias} (${e.ocorrencias_abertas} abertas)`)}
     </dl>
     <h2>Dados de placa e recebimento</h2>
     <dl class="ficha" style="margin:0">
@@ -604,6 +634,10 @@ async function telaEquip(id) {
       ${campo('Garantia até', e.garantia_ate ? `${fmtD(e.garantia_ate)} ${e.em_garantia ? '<span class="tg ok">em garantia</span>' : '<span class="tg">vencida</span>'}` : '—')}
       ${e.observacoes ? campo('Observações', esc(e.observacoes)) : ''}
     </dl>
+    <h2>Ocorrências (${ocs.length})</h2>
+    ${ocs.length ? ocs.map(o => cardOcorrencia(o, anx.filter(a => a.ocorrencia_id === o.id), urls)).join('') : '<div class="lista"><div class="vazio">Nenhuma ocorrência registrada.</div></div>'}
+    <h2>Fotos e documentos da peça (${anx.filter(a => !a.ocorrencia_id).length})</h2>
+    ${galeriaAnexos(anx.filter(a => !a.ocorrencia_id), urls) || '<div class="sub">Nenhum anexo. Use "Anexar foto / documento" (ex.: foto da placa).</div>'}
     <h2>Histórico</h2>
     ${hist.length ? `<div class="tempo">${hist.map(h => {
       const [rot, cor] = EVENTO[h.evento] || [h.evento, '#64748b'];
@@ -813,6 +847,225 @@ function abrirReceber() {
     });
 }
 
+/* ---------- fotos e documentos ---------- */
+const LIMITE_STORAGE = 1024 * 1024 * 1024;   // 1 GB do plano gratuito
+async function comprimirImagem(arquivo, lado = 1600, qualidade = 0.75) {
+  if (!/^image\//.test(arquivo.type)) return { blob: arquivo, tipo: arquivo.type || 'application/octet-stream', nome: arquivo.name };
+  let img;
+  try { img = await createImageBitmap(arquivo, { imageOrientation: 'from-image' }); }
+  catch (e) {
+    img = await new Promise((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('Imagem inválida: ' + arquivo.name)); i.src = URL.createObjectURL(arquivo); });
+  }
+  const w = img.width, h = img.height, f = Math.min(1, lado / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.round(w * f); c.height = Math.round(h * f);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', qualidade));
+  if (!blob) throw new Error('Não foi possível processar a imagem ' + arquivo.name);
+  return { blob, tipo: 'image/jpeg', nome: (arquivo.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg' };
+}
+// Envia arquivos para o Storage e registra cada um em "anexos". Retorna {ok, falhas[]}.
+async function enviarAnexos(arquivos, vinculo, categoria, descricao) {
+  let ok = 0; const falhas = [];
+  for (const arq of arquivos) {
+    try {
+      if (!/^image\//.test(arq.type) && arq.type !== 'application/pdf') throw new Error('tipo de arquivo não aceito (use foto ou PDF)');
+      const c = await comprimirImagem(arq);
+      if (c.blob.size > 10 * 1024 * 1024) throw new Error('arquivo maior que 10 MB');
+      const ext = c.tipo === 'application/pdf' ? 'pdf' : 'jpg';
+      const caminho = `${vinculo.equipamento_id}/${vinculo.ocorrencia_id || vinculo.substituicao_id || 'peca'}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const up = await sb.storage.from('anexos').upload(caminho, c.blob, { contentType: c.tipo, upsert: false });
+      if (up.error) throw up.error;
+      await q(sb.from('anexos').insert({ ...vinculo, categoria: c.tipo === 'application/pdf' && categoria === 'FOTO' ? 'DOCUMENTO' : categoria,
+        caminho_storage: caminho, nome_arquivo: c.nome, tipo_mime: c.tipo, tamanho_bytes: c.blob.size, descricao: descricao || null }).select('id').single());
+      ok++;
+    } catch (e) { falhas.push(`${arq.name}: ${msgErro(e)}`); }
+  }
+  return { ok, falhas };
+}
+async function urlsAnexos(lista) {
+  if (!lista.length) return {};
+  const { data, error } = await sb.storage.from('anexos').createSignedUrls(lista.map(a => a.caminho_storage), 3600);
+  if (error) return {};
+  return Object.fromEntries((data || []).filter(d => d.signedUrl).map(d => [d.path, d.signedUrl]));
+}
+const ROT_ANEXO = { FOTO:'Foto', FOTO_PLACA:'Placa', DOCUMENTO:'Documento', NOTA_FISCAL:'Nota fiscal', LAUDO:'Laudo', DATASHEET:'Datasheet', OUTRO:'Outro' };
+function galeriaAnexos(lista, urls) {
+  if (!lista.length) return '';
+  return `<div class="fotos">${lista.map(a => { const u = urls[a.caminho_storage]; const leg = esc(ROT_ANEXO[a.categoria] || '') + (a.descricao ? ' · ' + esc(a.descricao) : '');
+    return u ? `<a href="${esc(u)}" target="_blank" rel="noopener" title="${esc(a.nome_arquivo)} · ${fmtDH(a.criado_em)}">${/^image\//.test(a.tipo_mime || '') ? `<img src="${esc(u)}" alt="${esc(a.nome_arquivo)}" loading="lazy">` : `<span class="doc">📄<br>${esc(a.nome_arquivo)}</span>`}<span class="leg">${leg}</span></a>`
+             : `<a><span class="doc">indisponível</span></a>`; }).join('')}</div>`;
+}
+const campoFotos = (rot = 'Fotos (opcional)') => `<div class="campo"><label>${rot}</label>
+  <input type="file" name="fotos" accept="image/*,application/pdf" multiple>
+  <span class="dica">Pode tirar com a câmera do celular. Cada foto é reduzida (~250 KB) antes de enviar.</span><div class="prev-fotos" data-prev></div></div>`;
+function ligarPrevia(form) {
+  const inp = form.querySelector('[name=fotos]'); if (!inp) return;
+  inp.addEventListener('change', () => { const box = form.querySelector('[data-prev]'); box.innerHTML = '';
+    [...inp.files].forEach(f => { if (/^image\//.test(f.type)) { const i = document.createElement('img'); i.src = URL.createObjectURL(f); box.appendChild(i); }
+      else { const sp = document.createElement('span'); sp.className = 'tg'; sp.textContent = f.name; box.appendChild(sp); } }); });
+}
+const GRAV = { BAIXA:'Baixa', MEDIA:'Média', ALTA:'Alta', CRITICA:'Crítica' };
+function cardOcorrencia(o, anexosOc, urls, comAcoes = true, cabecalhoPeca = '') {
+  const enc = o.situacao === 'ENCERRADA';
+  return `<div class="oc ${enc ? 'encerrada' : ''}" style="--c:${enc ? '#16a34a' : (o.gravidade === 'CRITICA' || o.gravidade === 'ALTA' ? '#dc2626' : '#f59e0b')}">
+    <div class="oc-cab"><span class="oc-cod">${esc(o.codigo_oc)}</span><span class="tg">${esc(o.tipo_nome)}</span>
+      <span class="tg grav-${esc(o.gravidade)}">${esc(GRAV[o.gravidade] || o.gravidade)}</span>
+      <span class="tg ${enc ? 'ok' : 'warn'}">${enc ? 'Encerrada' : (o.situacao === 'EM_ANDAMENTO' ? 'Em andamento' : 'Aberta')}</span>
+      <span class="esp"></span><span class="sub">${fmtDH(o.data_ocorrencia)} · ${esc(o.responsavel)}</span></div>
+    ${cabecalhoPeca}<div class="oc-tit">${esc(o.titulo)}</div>
+    <div class="oc-txt">${esc(o.descricao)}</div>
+    ${o.tag_local ? `<div class="sub" style="margin-top:4px">Local na época: <b class="mono">${esc(o.tag_local)}</b> · ${esc(o.posicao_descricao || '')}</div>` : ''}
+    ${enc ? `<div class="oc-acao"><b>Encerrada em ${fmtDH(o.encerrada_em)}:</b> ${esc(o.acao_tomada)}</div>` : ''}
+    ${galeriaAnexos(anexosOc, urls)}
+    ${comAcoes && pode() ? `<div class="linha" style="margin-top:8px"><button class="bt peq" data-oc-foto="${o.id}">📷 Anexar foto</button>
+      ${enc ? '' : `<button class="bt peq" data-oc-encerrar="${o.id}">✓ Encerrar</button>`}</div>` : ''}
+  </div>`;
+}
+function opcoesStatus(instalado, incluirManter, atual) {
+  const ops = S.ref.status.filter(s => instalado ? s.exige_instalacao !== false : s.exige_instalacao !== true);
+  return (incluirManter ? `<option value="">Manter (${esc(stInfo(atual).nome)})</option>` : '') + ops.filter(s => s.codigo !== atual || !incluirManter)
+    .map(s => `<option value="${s.codigo}">${esc(s.nome)}</option>`).join('');
+}
+async function tiposOcorrencia() {
+  if (!S.tiposOc) S.tiposOc = await q(sb.from('tipos_ocorrencia').select('*').order('ordem', { ascending:true }).order('nome', { ascending:true }));
+  return S.tiposOc;
+}
+function avisoFotos(r, prefixo) {
+  if (r.falhas.length) { alert(`${prefixo}, mas ${r.falhas.length} arquivo(s) NÃO foram enviados:\n\n${r.falhas.join('\n')}\n\nAbra a peça e use "Anexar foto" para tentar de novo.`); }
+  return r.ok ? ` + ${r.ok} foto(s)` : '';
+}
+
+async function abrirOcorrencia(e) {
+  const tipos = (await tiposOcorrencia()).filter(t => t.ativo);
+  modal('Registrar ocorrência', `
+    <div class="sub" style="margin-bottom:10px"><b class="mono">${esc(e.tag_rastreio)}</b> · ${esc(tipoNome(e.tipo_codigo))} · SN ${esc(e.numero_serie || 'pendente')}${e.tag_local ? ' · ' + esc(e.tag_local) : ''}</div>
+    <div data-erro></div>
+    <div class="dupla">
+      <div class="campo"><label>Tipo</label><select name="tipo" required>${tipos.map(t => `<option value="${esc(t.codigo)}">${esc(t.nome)}</option>`).join('')}</select></div>
+      <div class="campo"><label>Gravidade</label><select name="grav">${Object.entries(GRAV).map(([k,v]) => `<option value="${k}" ${k === 'MEDIA' ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      <div class="campo"><label>Data</label><input type="date" name="data" value="${hoje()}" max="${hoje()}" required></div>
+      <div class="campo"><label>Responsável</label><input name="resp" value="${esc(S.perfil.nome)}" required></div>
+    </div>
+    <div class="campo"><label>Título (resumo)</label><input name="titulo" required maxlength="120" placeholder="Ex.: Água no compartimento do motor"></div>
+    <div class="campo"><label>Descrição</label><textarea name="desc" rows="4" required placeholder="O que foi encontrado, onde, condições (chuva, nível da galeria…)"></textarea></div>
+    <div class="campo"><label>Situação da peça depois da ocorrência</label><select name="status">${opcoesStatus(!!e.posicao_id, true, e.status_codigo)}</select></div>
+    ${campoFotos()}`,
+    'Registrar', async form => {
+      const f = new FormData(form);
+      const id = await q(sb.rpc('registrar_ocorrencia', { p_equipamento_id: e.id, p_categoria: f.get('tipo'), p_gravidade: f.get('grav'),
+        p_titulo: f.get('titulo').trim(), p_descricao: f.get('desc').trim(), p_responsavel: f.get('resp').trim(),
+        p_data: dataParaTs(f.get('data')), p_novo_status: f.get('status') || null }));
+      const r = await enviarAnexos([...form.querySelector('[name=fotos]').files], { equipamento_id: e.id, ocorrencia_id: id }, 'FOTO');
+      invalidar(); toast('Ocorrência registrada' + avisoFotos(r, 'A ocorrência foi registrada') + '.'); return true;
+    }, ligarPrevia);
+}
+function abrirEncerrar(o) {
+  const e = equipAtual;
+  modal('Encerrar ' + o.codigo_oc, `<div class="sub" style="margin-bottom:10px">${esc(o.tipo_nome)} · ${esc(o.titulo)}</div><div data-erro></div>
+    <div class="campo"><label>Ação tomada / solução</label><textarea name="acao" rows="3" required placeholder="Ex.: motor secado, isolação medida e aprovada, peça recolocada em operação"></textarea></div>
+    <div class="dupla"><div class="campo"><label>Data do encerramento</label><input type="date" name="data" value="${hoje()}" max="${hoje()}" required></div>
+      <div class="campo"><label>Situação da peça</label><select name="status">${opcoesStatus(!!e.posicao_id, true, e.status_codigo)}</select></div></div>
+    ${campoFotos('Fotos do serviço (opcional)')}`,
+    'Encerrar ocorrência', async form => {
+      const f = new FormData(form);
+      await q(sb.rpc('encerrar_ocorrencia', { p_ocorrencia_id: o.id, p_acao_tomada: f.get('acao').trim(), p_data: dataParaTs(f.get('data')), p_novo_status: f.get('status') || null }));
+      const r = await enviarAnexos([...form.querySelector('[name=fotos]').files], { equipamento_id: e.id, ocorrencia_id: o.id }, 'FOTO', 'Encerramento');
+      invalidar(); toast('Ocorrência encerrada' + avisoFotos(r, 'A ocorrência foi encerrada') + '.'); return true;
+    }, ligarPrevia);
+}
+function abrirAnexar(e, ocorrenciaId) {
+  modal(ocorrenciaId ? 'Anexar foto à ocorrência' : 'Anexar foto / documento', `<div data-erro></div>
+    ${ocorrenciaId ? '' : `<div class="campo"><label>Tipo de anexo</label><select name="cat">${Object.entries(ROT_ANEXO).map(([k,v]) => `<option value="${k}" ${k === 'FOTO_PLACA' ? 'selected' : ''}>${v}</option>`).join('')}</select></div>`}
+    <div class="campo"><label>Descrição (opcional)</label><input name="desc" maxlength="120" placeholder="Ex.: placa do atuador, vista lateral"></div>
+    ${campoFotos('Arquivos')}`,
+    'Enviar', async (form, erro) => {
+      const f = new FormData(form); const arqs = [...form.querySelector('[name=fotos]').files];
+      if (!arqs.length) return erro('Escolha pelo menos uma foto ou documento.');
+      const r = await enviarAnexos(arqs, { equipamento_id: e.id, ...(ocorrenciaId ? { ocorrencia_id: ocorrenciaId } : {}) }, ocorrenciaId ? 'FOTO' : f.get('cat'), f.get('desc').trim());
+      if (!r.ok) return erro('Nenhum arquivo foi enviado:\n' + r.falhas.join('\n'));
+      toast(`${r.ok} arquivo(s) anexado(s).` + (r.falhas.length ? ` ${r.falhas.length} falharam.` : ''));
+      if (r.falhas.length) alert('Não enviados:\n' + r.falhas.join('\n'));
+      return true;
+    }, ligarPrevia);
+}
+async function abrirSubstituir(e) {
+  const eq = await carregarEquip();
+  const est = eq.filter(x => x.tipo_codigo === e.tipo_codigo && !x.posicao_id && !['BAIXADO','EM_MANUTENCAO','AGUARDANDO_MANUTENCAO','COM_DEFEITO'].includes(x.status_codigo));
+  const tp = S.ref.tipos.find(t => t.codigo === e.tipo_codigo);
+  const ocsAbertas = (S.ocsAtual || []);
+  const saida = S.ref.status.filter(s => s.exige_instalacao !== true);
+  modal('Substituir ' + e.tag_rastreio, `
+    <div class="info">A peça atual sai de <b>${esc(e.tag_local)}</b> e a nova entra no lugar, numa única operação. A peça antiga mantém todo o histórico e fica ligada à nova.</div>
+    <div data-erro></div>
+    <fieldset class="pc"><legend>Peça nova (${esc(tp.nome)})</legend>
+      ${est.length ? `<div class="seg"><label><input type="radio" name="modo" value="nova" checked><span>Nova peça</span></label><label><input type="radio" name="modo" value="estoque"><span>Do estoque (${est.length})</span></label></div>` : '<input type="hidden" name="modo" value="nova">'}
+      <div data-painel="nova">
+        <div class="dupla"><div class="campo"><label>Fabricante</label><select name="fab">${S.ref.fabricantes.map(f => `<option value="${f.id}" ${f.nome === e.fabricante ? 'selected' : ''}>${esc(f.nome)}</option>`).join('')}</select></div>
+          <div class="campo"><label>SN da placa</label><input class="sninput" name="sn" autocomplete="off" ${tp.formato_sn === '^[0-9]{5}$' ? 'inputmode="numeric" maxlength="5"' : ''}></div></div>
+        ${tp.formato_sn_descricao ? `<div class="campo" style="margin-top:-8px"><span class="dica">Formato: ${esc(tp.formato_sn_descricao)}</span></div>` : ''}
+        <label class="chk"><input type="checkbox" name="semsn"> Sem SN (placa caiu, ilegível ou não conferida)</label>
+        <div data-semsn class="hide"><div class="campo"><label>Motivo da falta do SN</label><input name="motivosn"></div></div>
+      </div>
+      ${est.length ? `<div data-painel="estoque" class="hide"><div class="campo"><label>Peça em estoque</label><select name="estoque"><option value="">Selecione…</option>${est.map(x => `<option value="${x.id}">${esc(x.tag_rastreio)} · SN ${esc(x.numero_serie || 'pendente')} · ${esc(x.fabricante)}</option>`).join('')}</select></div></div>` : ''}
+    </fieldset>
+    <div class="campo"><label>Motivo da substituição</label><input name="motivo" required placeholder="Ex.: entrada de água no motor"></div>
+    ${ocsAbertas.length ? `<div class="campo"><label>Ligar à ocorrência</label><select name="oc"><option value="">Nenhuma</option>${ocsAbertas.map((o, i) => `<option value="${o.id}" ${i === 0 && o.situacao !== 'ENCERRADA' ? 'selected' : ''}>${esc(o.codigo_oc)} · ${esc(o.tipo_nome)} · ${esc(o.titulo)}</option>`).join('')}</select></div>` : ''}
+    <div class="dupla">
+      <div class="campo"><label>Data</label><input type="date" name="data" value="${hoje()}" max="${hoje()}" required></div>
+      <div class="campo"><label>Responsável</label><input name="resp" value="${esc(S.perfil.nome)}" required></div>
+      <div class="campo"><label>A peça retirada fica</label><select name="stSai">${saida.map(s => `<option value="${s.codigo}" ${s.codigo === 'SUBSTITUIDO' ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>
+      <div class="campo"><label>A peça nova entra</label><select name="stEntra"><option value="EM_OPERACAO">Em operação</option><option value="INSTALADO_NAO_COMISSIONADO">Instalado — não comissionado</option></select></div>
+    </div>
+    <div class="campo"><label>Observações (opcional)</label><textarea name="obs" rows="2"></textarea></div>
+    ${campoFotos()}`,
+    'Substituir', async (form, erro) => {
+      const f = new FormData(form); let novo;
+      if (f.get('modo') === 'estoque') { if (!f.get('estoque')) return erro('Escolha a peça do estoque.'); novo = { equipamento_id: f.get('estoque') }; }
+      else {
+        novo = { fabricante_id: f.get('fab') };
+        if (f.get('semsn') === 'on') { if (!(f.get('motivosn') || '').trim()) return erro('Informe o motivo da falta do SN.'); Object.assign(novo, { situacao_sn: 'SEM_PLACA', sn_observacao: f.get('motivosn').trim() }); }
+        else { const sn = (f.get('sn') || '').replace(/\s+/g, '').toUpperCase();
+          if (!sn) return erro('Informe o SN da peça nova ou marque "Sem SN".');
+          if (tp.formato_sn && !(new RegExp(tp.formato_sn)).test(sn)) return erro(`SN "${sn}" fora do padrão (${tp.formato_sn_descricao}).`);
+          novo.numero_serie = sn; }
+      }
+      if (!confirm(`Confirma a substituição de ${e.tag_rastreio} em ${e.tag_local}? Ela não pode ser desfeita (fica no histórico).`)) return false;
+      const r1 = await q(sb.rpc('substituir_peca', { p_equipamento_antigo_id: e.id, p_novo: novo, p_motivo: f.get('motivo').trim(), p_responsavel: f.get('resp').trim(),
+        p_data: dataParaTs(f.get('data')), p_status_retirado: f.get('stSai'), p_status_novo: f.get('stEntra'), p_ocorrencia_id: f.get('oc') || null, p_observacoes: (f.get('obs') || '').trim() || null }));
+      const r = await enviarAnexos([...form.querySelector('[name=fotos]').files], { equipamento_id: e.id, substituicao_id: r1.substituicao_id }, 'FOTO', 'Substituição');
+      invalidar(); toast(`Substituída. Peça nova: ${r1.tag_rastreio}` + avisoFotos(r, 'A substituição foi registrada') + '.'); return true;
+    }, el => {
+      ligarPrevia(el);
+      el.addEventListener('change', ev => {
+        if (ev.target.name === 'modo') el.querySelectorAll('[data-painel]').forEach(d => d.classList.toggle('hide', d.dataset.painel !== ev.target.value));
+        if (ev.target.name === 'semsn') { el.querySelector('[data-semsn]').classList.toggle('hide', !ev.target.checked); el.querySelector('[name=sn]').disabled = ev.target.checked; }
+      });
+    });
+}
+
+/* ---------- tela de ocorrências ---------- */
+async function telaOcorrencias() {
+  const u = new URLSearchParams(location.hash.split('?')[1] || '');
+  const sit = u.get('sit') || 'abertas', g = u.get('g') || '', tipo = u.get('tipo') || '';
+  let qb = sb.from('vw_ocorrencias').select('*');
+  if (sit === 'abertas') qb = qb.neq('situacao', 'ENCERRADA'); else if (sit === 'encerradas') qb = qb.eq('situacao', 'ENCERRADA');
+  if (g) qb = qb.eq('galeria', g); if (tipo) qb = qb.eq('categoria', tipo);
+  const [lista, tipos] = await Promise.all([q(qb.order('data_ocorrencia', { ascending:false }).limit(300)), tiposOcorrencia()]);
+  const pos = await carregarPosicoes(); const galerias = [...new Set(pos.filter(p => p.galeria).map(p => p.galeria))];
+  const link = (k, v) => { const x = new URLSearchParams({ sit, g, tipo }); x.set(k, v); [...x.keys()].forEach(c => { if (!x.get(c)) x.delete(c); }); return '#/ocorrencias?' + x; };
+  return moldura('ocorrencias', `
+    <h1>Ocorrências</h1><div class="sub">Para registrar uma ocorrência, abra a peça (pelos Filtros ou pela Busca) e use <b>Registrar ocorrência</b>.</div>
+    <div class="chips">${[['abertas','Abertas'],['encerradas','Encerradas'],['todas','Todas']].map(([k,l]) => `<a class="chip ${sit === k ? 'on' : ''}" href="${link('sit', k)}">${l}</a>`).join('')}</div>
+    <div class="filtros-rel" style="margin-top:0">
+      <div class="campo"><label>Galeria</label><select data-ocf="g"><option value="">Todas</option>${galerias.map(x => `<option ${x === g ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
+      <div class="campo"><label>Tipo</label><select data-ocf="tipo"><option value="">Todos</option>${tipos.map(t => `<option value="${esc(t.codigo)}" ${t.codigo === tipo ? 'selected' : ''}>${esc(t.nome)}</option>`).join('')}</select></div>
+    </div>
+    <div class="sub" style="margin-bottom:8px">${lista.length} ocorrência(s)</div>
+    ${lista.map(o => `<a href="#/e/${o.equipamento_id}" style="color:inherit;display:block">${cardOcorrencia(o, [], {}, false,
+      `<div class="sub" style="margin-top:4px"><b class="mono">${esc(o.tag_rastreio)}</b> · ${esc(tipoNome(o.equipamento_tipo))} · SN ${esc(o.numero_serie || 'pendente')}${o.anexos > 0 ? ` · 📷 ${o.anexos}` : ''}</div>`)}</a>`).join('')
+      || '<div class="lista"><div class="vazio">Nenhuma ocorrência com esses filtros.</div></div>'}`);
+}
+
 /* ---------- relatório consolidado ---------- */
 function situacaoPos(p) {
   const st = ['valvula','atuador','redutor'].map(k => p[k + '_status']).filter(Boolean);
@@ -889,14 +1142,14 @@ async function telaRelatorio() {
       <td>${Number(p.ocorrencias_abertas) || '—'}</td></tr>`; }).join('')}
     </tbody></table>` : `
     <table class="rel"><thead><tr><th>TAG rastreio</th><th>Tipo</th><th>Fabricante / modelo</th><th>SN</th><th>Localização</th><th class="rx">TAG CEDAE</th>
-      <th>Status</th><th>Instalado em</th><th>Ocorr. (água)</th><th>NF</th></tr></thead><tbody>
+      <th>Status</th><th>Instalado em</th><th>Ocorr. (abertas)</th><th>NF</th></tr></thead><tbody>
     ${linhas.map(e => { const s = stInfo(e.status_codigo); return `<tr>
       <td class="sn">${esc(e.tag_rastreio)}</td><td>${esc(tipoNome(e.tipo_codigo))}</td><td>${esc(e.fabricante)}${e.modelo ? '<span class="s">' + esc(e.modelo) + '</span>' : ''}</td>
       <td class="sn">${e.numero_serie ? esc(e.numero_serie) : '<span class="fl">' + esc(SITUACAO_SN[e.situacao_sn] || 'pendente') + '</span>'}</td>
       <td>${e.tag_local ? `<span class="sn">${esc(e.tag_local)}</span><span class="s">${esc(e.posicao_descricao || '')}</span>` : '<span class="fl">fora de posição</span>'}</td>
       <td class="rx">${esc(e.tag_consorcio || '—')}</td>
       <td><span class="s sit"><i style="--c:${esc(s.cor)}"></i>${esc(s.nome)}</span></td>
-      <td>${e.instalado_em ? fmtD(e.instalado_em) + (e.instalacao_data_estimada ? '<span class="s">estimada</span>' : '') : '—'}</td><td>${e.total_ocorrencias ? `${e.total_ocorrencias} (${e.ocorrencias_agua})` : '—'}</td><td>${esc(e.nota_fiscal || '—')}</td></tr>`; }).join('')}
+      <td>${e.instalado_em ? fmtD(e.instalado_em) + (e.instalacao_data_estimada ? '<span class="s">estimada</span>' : '') : '—'}</td><td>${e.total_ocorrencias ? `${e.total_ocorrencias} (${e.ocorrencias_abertas})` : '—'}</td><td>${esc(e.nota_fiscal || '—')}</td></tr>`; }).join('')}
     </tbody></table>`;
 
   S.ultimoRel = { pr, linhas, descFiltros };
@@ -968,14 +1221,14 @@ function exportarCSV() {
   const peca = (p, k) => !p.tipos_previstos.includes(k.toUpperCase()) ? ['n/a',''] : !p[k + '_id'] ? ['não instalado',''] : [p[k + '_sn'] || 'SN pendente', stInfo(p[k + '_status']).nome];
   const cab = pr.modo === 'posicao'
     ? ['Galeria','Filtro','Item','Posição','Nível','TAG local','TAG CEDAE','Válvula SN','Válvula status','Válvula fabricante','Atuador SN','Atuador status','Atuador fabricante','Redutor SN','Redutor status','Redutor fabricante','Situação','Falta','Ocorrências abertas']
-    : ['TAG rastreio','Tipo','Fabricante','Modelo','SN','Situação SN','TAG local','Posição','TAG CEDAE','Status','Instalado em','Data estimada','Ocorrências','Ocorrências de água','Nota fiscal','Garantia até'];
+    : ['TAG rastreio','Tipo','Fabricante','Modelo','SN','Situação SN','TAG local','Posição','TAG CEDAE','Status','Instalado em','Data estimada','Ocorrências','Ocorrências abertas','Nota fiscal','Garantia até'];
   const rows = linhas.map(x => pr.modo === 'posicao'
     ? [x.galeria, x.filtro, x.item, x.descricao, x.nivel, x.tag_local, x.tag_consorcio,
        ...peca(x,'valvula'), x.valvula_fabricante, ...peca(x,'atuador'), x.atuador_fabricante, ...peca(x,'redutor'), x.redutor_fabricante,
        SIT_POS[situacaoPos(x)][0], x.tipos_pendentes.map(tipoNome).join(', '), x.ocorrencias_abertas]
     : [x.tag_rastreio, tipoNome(x.tipo_codigo), x.fabricante, x.modelo, x.numero_serie, x.numero_serie ? 'Informado' : (SITUACAO_SN[x.situacao_sn] || 'Pendente'),
        x.tag_local, x.posicao_descricao, x.tag_consorcio, stInfo(x.status_codigo).nome, x.instalado_em ? fmtD(x.instalado_em) : '', x.instalado_em ? (x.instalacao_data_estimada ? 'Sim' : 'Não') : '',
-       x.total_ocorrencias, x.ocorrencias_agua, x.nota_fiscal, x.garantia_ate ? fmtD(x.garantia_ate) : '']);
+       x.total_ocorrencias, x.ocorrencias_abertas, x.nota_fiscal, x.garantia_ate ? fmtD(x.garantia_ate) : '']);
   const cel = v => { const t = String(v ?? ''); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
   const txt = [[`Relatório consolidado de equipamentos — ${S.ref.obras[0]?.nome || ''}`], [`Emitido em ${fmtDH(new Date().toISOString())} por ${emitidoPor()} — Filtros: ${descFiltros}`], [], cab, ...rows]
     .map(r => r.map(cel).join(';')).join('\r\n');
@@ -1003,7 +1256,49 @@ async function telaConta() {
       ${S.ref.perfis.map(p => `<tr><td>${esc(p.nome)}</td><td>${p.user_id === S.sessao.user.id ? '<b>admin</b> (você)' :
         `<select data-papel="${p.user_id}">${['leitor','editor','admin'].map(x => `<option ${x === p.papel ? 'selected' : ''}>${x}</option>`).join('')}</select>`}</td></tr>`).join('')}
       </tbody></table></div>` : ''}
+    ${pode() ? `<h2>Backup dos dados</h2>
+      <div class="medidor"><div class="sub">Baixa um arquivo com <b>todos os dados</b> (posições, peças, instalações, ocorrências, substituições, anexos e auditoria).
+      Guarde em lugar seguro (computador, Drive, pen drive). As fotos em si ficam no Supabase; o arquivo guarda a lista e onde cada uma está.</div>
+      <button class="bt pri" style="margin-top:10px" data-backup>⬇ Baixar backup completo</button></div>` : ''}
+    ${admin() ? await blocoAdmin() : ''}
     <div class="sub" style="margin-top:24px">${VERSAO}</div>`);
+}
+async function blocoAdmin() {
+  const [anx, tipos] = await Promise.all([buscarTodos(() => sb.from('anexos').select('tamanho_bytes')), tiposOcorrencia()]);
+  const usado = anx.reduce((n, a) => n + Number(a.tamanho_bytes || 0), 0), pct = Math.min(100, usado * 100 / LIMITE_STORAGE);
+  const mb = v => (v / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  return `<h2>Espaço das fotos</h2>
+    <div class="medidor"><div><b>${mb(usado)} MB</b> de 1.024 MB usados (${pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%) · ${anx.length} arquivo(s)</div>
+      <div class="barra" style="height:10px"><i style="width:${Math.max(pct, 0.5)}%;background:${pct > 85 ? 'var(--bad)' : pct > 65 ? 'var(--warn)' : 'var(--ok)'}"></i></div>
+      <div class="sub" style="margin-top:6px">Plano gratuito: 1 GB. Com fotos reduzidas pelo app (~250 KB), cabem cerca de ${Math.max(0, Math.floor((LIMITE_STORAGE - usado) / 256000)).toLocaleString('pt-BR')} fotos a mais.</div></div>
+    <h2>Tipos de ocorrência</h2>
+    <div class="lista"><table class="t"><thead><tr><th>Tipo</th><th>Ativo</th></tr></thead><tbody>
+      ${tipos.map(t => `<tr><td>${esc(t.nome)}</td><td><input type="checkbox" data-tipo-ativo="${esc(t.codigo)}" ${t.ativo ? 'checked' : ''}></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="linha" style="margin-top:8px"><button class="bt" data-novo-tipo>+ Novo tipo</button><span class="sub">Tipos não são apagados: desative o que não usar mais.</span></div>`;
+}
+function novoTipoOcorrencia() {
+  modal('Novo tipo de ocorrência', `<div data-erro></div><div class="campo"><label>Nome</label><input name="nome" required maxlength="60" placeholder="Ex.: Queda de tensão"></div>`,
+    'Criar', async (form, erro) => {
+      const nome = new FormData(form).get('nome').trim();
+      const codigo = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
+      if (codigo.length < 2) return erro('Nome muito curto.');
+      if ((await tiposOcorrencia()).some(t => t.codigo === codigo || t.nome.toLowerCase() === nome.toLowerCase())) return erro('Já existe um tipo com esse nome.');
+      await q(sb.from('tipos_ocorrencia').insert({ codigo, nome, ordem: 500 }).select('codigo').single());
+      S.tiposOc = null; toast('Tipo criado: ' + nome); return true;
+    });
+}
+async function baixarBackup(botao) {
+  botao.disabled = true; const txt = botao.textContent; botao.textContent = 'Gerando…';
+  try {
+    const dados = await q(sb.rpc('exportar_backup'));
+    const blob = new Blob([JSON.stringify(dados)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `backup_rastreabilidade_${hoje()}.json`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    toast(`Backup gerado: ${dados.equipamentos?.length || 0} peças, ${dados.ocorrencias?.length || 0} ocorrências.`);
+  } catch (e) { toast(msgErro(e)); }
+  finally { botao.disabled = false; botao.textContent = txt; }
 }
 
 /* =====================================================================
@@ -1056,6 +1351,7 @@ async function rotear() {
     else if (partes[0] === 'estoque') html = await telaEstoque();
     else if (partes[0] === 'conta') html = await telaConta();
     else if (partes[0] === 'relatorio') html = await telaRelatorio();
+    else if (partes[0] === 'ocorrencias') html = await telaOcorrencias();
     else html = await telaPainel();
     app.innerHTML = html;
     window.scrollTo(0, 0);
@@ -1067,9 +1363,13 @@ async function rotear() {
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao],[data-nome]');
+  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao],[data-nome],[data-oc-foto],[data-oc-encerrar],[data-backup],[data-novo-tipo]');
   if (!t) return;
   if ('pdf' in t.dataset) return window.print();
+  if (t.dataset.ocFoto) { ev.preventDefault(); return abrirAnexar(equipAtual, t.dataset.ocFoto); }
+  if (t.dataset.ocEncerrar) { ev.preventDefault(); return abrirEncerrar((S.ocsAtual || []).find(o => o.id === t.dataset.ocEncerrar)); }
+  if ('backup' in t.dataset) return baixarBackup(t);
+  if ('novoTipo' in t.dataset) return novoTipoOcorrencia();
   if ('nome' in t.dataset) return modal('Alterar meu nome', `<div data-erro></div>
       <div class="info">É o nome que aparece nos relatórios, nas instalações e no histórico de alterações.</div>
       <div class="campo"><label>Nome</label><input name="nome" value="${esc(S.perfil.nome)}" maxlength="80" required placeholder="Ex.: Eduardo Fernandes"></div>`,
@@ -1081,7 +1381,12 @@ document.addEventListener('click', async ev => {
   if ('csv' in t.dataset) return exportarCSV();
   if (t.dataset.ir) location.hash = t.dataset.ir;
   else if (t.dataset.registrar) abrirRegistrar(t.dataset.registrar).catch(e => toast(msgErro(e)));
-  else if (t.dataset.acao && equipAtual) acoesEquip(t.dataset.acao, equipAtual);
+  else if (t.dataset.acao && equipAtual) {
+    if (t.dataset.acao === 'ocorrencia') abrirOcorrencia(equipAtual).catch(e => toast(msgErro(e)));
+    else if (t.dataset.acao === 'substituir') abrirSubstituir(equipAtual).catch(e => toast(msgErro(e)));
+    else if (t.dataset.acao === 'anexar') abrirAnexar(equipAtual);
+    else acoesEquip(t.dataset.acao, equipAtual);
+  }
   else if (t.dataset.chip) { filtroBusca = t.dataset.chip; rotear(); }
   else if ('receber' in t.dataset) abrirReceber();
   else if ('sair' in t.dataset) { await sb.auth.signOut(); S.sessao = null; invalidar(); location.hash = '#/'; telaLogin(); }
@@ -1114,6 +1419,12 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('toggle', ev => { if (ev.target.classList?.contains('assin-ed')) S.assinAberto = ev.target.open; }, true);
 document.addEventListener('change', async ev => {
+  const of = ev.target.closest('[data-ocf]');
+  if (of) { const u = new URLSearchParams(location.hash.split('?')[1] || ''); if (of.value) u.set(of.dataset.ocf, of.value); else u.delete(of.dataset.ocf);
+    location.hash = '#/ocorrencias?' + u.toString(); return; }
+  const tpo = ev.target.closest('[data-tipo-ativo]');
+  if (tpo) { try { await q(sb.from('tipos_ocorrencia').update({ ativo: tpo.checked }).eq('codigo', tpo.dataset.tipoAtivo).select('codigo').single()); S.tiposOc = null; toast(tpo.checked ? 'Tipo ativado.' : 'Tipo desativado (continua nas ocorrências antigas).'); }
+    catch (e) { toast(msgErro(e)); rotear(); } return; }
   const rf = ev.target.closest('[data-relf]');
   if (rf) {
     const pr = parametrosRel(); pr[rf.dataset.relf] = rf.value;
