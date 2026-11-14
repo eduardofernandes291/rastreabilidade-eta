@@ -223,7 +223,7 @@ table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
    ===================================================================== */
 const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
-const VERSAO = 'v0.5 · Filtros A01–F12 e assinaturas editáveis';
+const VERSAO = 'v0.6 · Emitido por, ocorrências e posições vazias';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -824,17 +824,18 @@ function situacaoPos(p) {
 }
 const SIT_POS = {
   OPERACAO:['Em operação','#16a34a'], INSTALADA:['Instalada — não comissionada','#0ea5e9'], SEM_SN:['Completa — SN pendente','#d97706'],
-  INCOMPLETA:['Incompleta','#94a3b8'], VAZIA:['Sem peças','#cbd5e1'], DEFEITO:['Com defeito','#dc2626']
+  INCOMPLETA:['Incompleta','#94a3b8'], VAZIA:['Aguardando instalação','#cbd5e1'], DEFEITO:['Com defeito','#dc2626']
 };
 function parametrosRel() {
   const u = new URLSearchParams(location.hash.split('?')[1] || '');
   return { modo: u.get('modo') || 'posicao', g: u.get('g') || '', f: u.get('f') || '', tipo: u.get('tipo') || '',
-           sit: u.get('sit') || '', fab: u.get('fab') || '', folha: u.get('folha') || 'paisagem' };
+           sit: u.get('sit') || '', fab: u.get('fab') || '', folha: u.get('folha') || 'paisagem', vazias: u.get('vazias') || 'ocultar' };
 }
 function dadosRelatorio(pr, pos, eq) {
   if (pr.modo === 'posicao') {
     return pos.filter(p => (!pr.g || p.galeria === pr.g) && (!pr.f || String(p.filtro_numero) === pr.f)
       && (!pr.sit || situacaoPos(p) === pr.sit)
+      && (pr.sit === 'VAZIA' || pr.vazias === 'mostrar' || situacaoPos(p) !== 'VAZIA')
       && (!pr.tipo || p.tipos_previstos.includes(pr.tipo))
       && (!pr.fab || ['valvula','atuador','redutor'].some(k => p[k + '_fabricante'] === pr.fab)));
   }
@@ -865,7 +866,7 @@ async function telaRelatorio() {
     [eqRecorte.filter(e => e.status_codigo === 'EM_OPERACAO').length, 'Em operação'],
     [eqRecorte.filter(e => DEFEITO.includes(e.status_codigo)).length, 'Defeito / manutenção'],
     [eqRecorte.filter(e => e.sn_pendente).length, 'SN pendente'],
-    [eqRecorte.reduce((n, e) => n + Number(e.ocorrencias_agua || 0), 0), 'Ocorr. de água']
+    [eqRecorte.reduce((n, e) => n + Number(e.ocorrencias_abertas || 0), 0), 'Ocorrências abertas']
   ];
   const descFiltros = [pr.g && 'Galeria ' + pr.g, pr.f && 'Filtro ' + (pr.g || '') + String(pr.f).padStart(2,'0'), pr.tipo && tipoNome(pr.tipo),
     pr.fab, pr.sit && (pr.modo === 'posicao' ? SIT_POS[pr.sit]?.[0] : (stInfo(pr.sit).nome !== pr.sit ? stInfo(pr.sit).nome : opsSit.find(o => o[0] === pr.sit)?.[1]))]
@@ -912,7 +913,9 @@ async function telaRelatorio() {
         ${sel('tipo', 'Tipo', [['','Todos'], ...S.ref.tipos.map(t => [t.codigo, t.nome])])}
         ${sel('fab', 'Fabricante', [['','Todos'], ...S.ref.fabricantes.map(f => [f.nome, f.nome])])}
         ${sel('sit', pr.modo === 'posicao' ? 'Situação' : 'Status', opsSit)}
+        ${pr.modo === 'posicao' ? sel('vazias', 'Posições aguardando instalação', [['ocultar','Ocultar'],['mostrar','Mostrar']]) : ''}
         ${sel('folha', 'Folha do PDF', [['paisagem','Deitada (recomendado)'],['retrato','Em pé']])}
+        <div class="campo"><label>Emitido por (sai no PDF)</label><input data-emitido value="${esc(emitidoPor())}" placeholder="Ex.: Eduardo Fernandes — Qualidade"></div>
       </div>
       <details class="assin-ed"${S.assinAberto ? ' open' : ''}><summary>Assinaturas do PDF (${assinaturas().filter(x => x.cargo.trim()).length})</summary>
         <div class="sub" style="margin-top:6px">Até 4 campos. Deixe o cargo em branco para não imprimir aquele campo. Fica guardado neste navegador.</div>
@@ -926,7 +929,7 @@ async function telaRelatorio() {
     <div class="so-impressao rel-cab">
       <div><h1>Relatório Consolidado de Equipamentos</h1>
         <div class="sub">${esc(obra?.nome || '')} · Rastreabilidade de válvulas, atuadores e redutores</div></div>
-      <div class="meta">Emitido em ${fmtDH(new Date().toISOString())}<br>por ${esc(S.perfil.nome)}<br>Filtros: ${esc(descFiltros)}</div>
+      <div class="meta">Emitido em ${fmtDH(new Date().toISOString())}<br>por <span data-emitido-pdf>${esc(emitidoPor())}</span><br>Filtros: ${esc(descFiltros)}</div>
     </div>
     <div class="so-impressao" style="font-weight:700;font-size:12px">1. Resumo quantitativo</div>
     <div class="rel-kpis">${kp.map(([n,l]) => `<div><b>${n}</b><span>${l}</span></div>`).join('')}</div>
@@ -935,6 +938,10 @@ async function telaRelatorio() {
     <div class="rel-wrap">${linhas.length ? tabela : '<div class="vazio">Nenhum registro com esses filtros.</div>'}</div>
     ${(() => { const a = assinaturas().filter(x => x.cargo.trim());
       return a.length ? `<div class="so-impressao assin" style="--n:${a.length}">${a.map(x => `<div>${x.nome.trim() ? `<b>${esc(x.nome)}</b>` : '<b>&nbsp;</b>'}${esc(x.cargo)}<div class="dt">Data: ____/____/______</div></div>`).join('')}</div>` : ''; })()}`);
+}
+function emitidoPor() {
+  try { const v = localStorage.getItem('rastreio_emitido_por'); if (v && v.trim()) return v; } catch (e) {}
+  return S.perfil?.nome || '';
 }
 const ASSIN_PADRAO = [
   { cargo: 'Supervisor da equipe de montagem', nome: '' },
@@ -970,7 +977,7 @@ function exportarCSV() {
        x.tag_local, x.posicao_descricao, x.tag_consorcio, stInfo(x.status_codigo).nome, x.instalado_em ? fmtD(x.instalado_em) : '', x.instalado_em ? (x.instalacao_data_estimada ? 'Sim' : 'Não') : '',
        x.total_ocorrencias, x.ocorrencias_agua, x.nota_fiscal, x.garantia_ate ? fmtD(x.garantia_ate) : '']);
   const cel = v => { const t = String(v ?? ''); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
-  const txt = [[`Relatório consolidado de equipamentos — ${S.ref.obras[0]?.nome || ''}`], [`Emitido em ${fmtDH(new Date().toISOString())} por ${S.perfil.nome} — Filtros: ${descFiltros}`], [], cab, ...rows]
+  const txt = [[`Relatório consolidado de equipamentos — ${S.ref.obras[0]?.nome || ''}`], [`Emitido em ${fmtDH(new Date().toISOString())} por ${emitidoPor()} — Filtros: ${descFiltros}`], [], cab, ...rows]
     .map(r => r.map(cel).join(';')).join('\r\n');
   const blob = new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -989,7 +996,7 @@ async function telaConta() {
       <div><dt>E-mail</dt><dd>${esc(S.sessao.user.email)}</dd></div>
       <div><dt>Papel</dt><dd>${esc({admin:'Administrador',editor:'Editor (cadastra e movimenta)',leitor:'Leitor (somente consulta)'}[S.perfil.papel])}</dd></div>
     </dl>
-    <div class="linha" style="margin-top:14px"><button class="bt" data-senha>Trocar minha senha</button><button class="bt per" data-sair>Sair</button></div>
+    <div class="linha" style="margin-top:14px"><button class="bt" data-nome>Alterar meu nome</button><button class="bt" data-senha>Trocar minha senha</button><button class="bt per" data-sair>Sair</button></div>
     ${admin() ? `<h2>Usuários</h2>
       <div class="info">Para incluir uma pessoa: Supabase › Authentication › Users › Add user › Create new user (marque "Auto Confirm User"). Ela aparece aqui como <b>leitor</b>; troque o papel se ela for cadastrar peças.</div>
       <div class="lista"><table class="t"><thead><tr><th>Nome</th><th>Papel</th></tr></thead><tbody>
@@ -1060,9 +1067,16 @@ async function rotear() {
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao]');
+  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao],[data-nome]');
   if (!t) return;
   if ('pdf' in t.dataset) return window.print();
+  if ('nome' in t.dataset) return modal('Alterar meu nome', `<div data-erro></div>
+      <div class="info">É o nome que aparece nos relatórios, nas instalações e no histórico de alterações.</div>
+      <div class="campo"><label>Nome</label><input name="nome" value="${esc(S.perfil.nome)}" maxlength="80" required placeholder="Ex.: Eduardo Fernandes"></div>`,
+      'Salvar', async form => {
+        await q(sb.rpc('atualizar_meu_nome', { p_nome: new FormData(form).get('nome').trim() }));
+        await carregarRef(); toast('Nome atualizado.'); return true;
+      });
   if ('assinPadrao' in t.dataset) { salvarAssinaturas(ASSIN_PADRAO.map(x => ({ ...x }))); return rotear(); }
   if ('csv' in t.dataset) return exportarCSV();
   if (t.dataset.ir) location.hash = t.dataset.ir;
@@ -1084,6 +1098,11 @@ document.addEventListener('click', async ev => {
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.dataset?.ir) location.hash = ev.target.dataset.ir; });
 document.addEventListener('input', ev => {
+  if (ev.target.matches('[data-emitido]')) {
+    try { localStorage.setItem('rastreio_emitido_por', ev.target.value); } catch (e) {}
+    const el = document.querySelector('[data-emitido-pdf]'); if (el) el.textContent = emitidoPor();
+    return;
+  }
   const a = ev.target.closest('[data-assin]'); if (!a) return;
   const lista = assinaturas(); lista[Number(a.dataset.assin)][a.dataset.campo] = a.value; salvarAssinaturas(lista);
   const n = lista.filter(x => x.cargo.trim()).length;
