@@ -241,7 +241,7 @@ table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
    ===================================================================== */
 const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
-const VERSAO = 'v0.8 · Histórico da enchente (data a confirmar)';
+const VERSAO = 'v0.9 · Local das peças fora de posição';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -320,7 +320,7 @@ async function carregarPosicoes(forcar) {
 async function carregarEquip(forcar) {
   if (S.equip && !forcar) return S.equip;
   S.equip = await buscarTodos(() => sb.from('vw_equipamentos')
-    .select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,situacao_sn,fabricante,modelo,status_codigo,posicao_id,tag_local,tag_consorcio,galeria,filtro,posicao_descricao,instalado_em,instalacao_data_estimada,observacoes,total_ocorrencias,ocorrencias_abertas,ocorrencias_agua,garantia_ate,nota_fiscal')
+    .select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,situacao_sn,fabricante,modelo,status_codigo,posicao_id,tag_local,tag_consorcio,galeria,filtro,posicao_descricao,instalado_em,instalacao_data_estimada,observacoes,local_armazenamento,total_ocorrencias,ocorrencias_abertas,ocorrencias_agua,garantia_ate,nota_fiscal')
     .order('tag_rastreio', { ascending:true }));
   return S.equip;
 }
@@ -416,8 +416,18 @@ async function telaPainel() {
     }).join('')}</div>`);
 }
 
+function locaisConhecidos() {
+  const padrao = ['Almoxarifado', 'Tenda 1269', 'Pipe Shop', 'Coester (assistência)'];
+  return [...new Set([...padrao, ...(S.equip || []).map(e => e.local_armazenamento).filter(Boolean)])].sort((a, b) => a.localeCompare(b));
+}
+const campoLocal = (nome, rot, valor = '') => `<div class="campo"><label>${rot}</label><input name="${nome}" list="locais" value="${esc(valor)}" placeholder="Ex.: Tenda 1269, Pipe Shop, Coester">
+  <datalist id="locais">${locaisConhecidos().map(l => `<option value="${esc(l)}">`).join('')}</datalist></div>`;
+async function gravarLocal(id, local) {
+  if (!local) return;
+  await q(sb.from('equipamentos').update({ local_armazenamento: local }).eq('id', id).select('id').single());
+}
 function linhaEquip(e) {
-  const local = e.tag_local ? `${esc(e.tag_local)} · ${esc(e.posicao_descricao || '')}` : 'Fora de posição';
+  const local = e.tag_local ? `${esc(e.tag_local)} · ${esc(e.posicao_descricao || '')}` : 'Fora de posição' + (e.local_armazenamento ? ` · 📍 <b>${esc(e.local_armazenamento)}</b>` : '');
   return `<a class="li" href="#/e/${e.id}">
     <div style="min-width:0;flex:1">
       <div><b class="mono">${esc(e.tag_rastreio)}</b> · ${esc(tipoNome(e.tipo_codigo))} · ${esc(e.fabricante)}</div>
@@ -595,7 +605,7 @@ async function telaEquip(id) {
   const placa = Object.entries(e.dados_placa || {}).filter(([,v]) => v !== '' && v != null);
   const loc = e.posicao_id
     ? `<a href="#/f/${esc(e.galeria)}/${Number(String(e.filtro || '').replace(/\D/g,''))}">${esc(e.tag_local)}</a> · ${esc(e.posicao_descricao)}`
-    : 'Fora de posição';
+    : 'Fora de posição' + (e.local_armazenamento ? ` · 📍 ${esc(e.local_armazenamento)}` : ' <span class="tg">local não informado</span>');
   const campo = (l, v) => `<div><dt>${l}</dt><dd>${v}</dd></div>`;
   const alteracoes = aud.filter(a => a.acao === 'UPDATE');
   return moldura('busca', `
@@ -655,7 +665,7 @@ const CAMPO_AUD = {
   status_codigo:'Status', numero_serie:'SN', situacao_sn:'Situação do SN', sn_observacao:'Observação do SN',
   dados_placa:'Dados de placa', nota_fiscal:'Nota fiscal', fornecedor:'Fornecedor', garantia_ate:'Garantia até',
   data_recebimento:'Recebimento', ano_fabricacao:'Ano de fabricação', observacoes:'Observações',
-  fabricante_id:'Fabricante', modelo_id:'Modelo', tipo_codigo:'Tipo'
+  fabricante_id:'Fabricante', modelo_id:'Modelo', tipo_codigo:'Tipo', local_armazenamento:'Local de armazenamento'
 };
 function fmtVal(v, campo) {
   if (v == null || v === '') return '—';
@@ -712,6 +722,7 @@ function acoesEquip(acao, e) {
         <div class="campo"><label>Fornecedor</label><input name="fornecedor" value="${esc(e.fornecedor || '')}"></div>
         <div class="campo"><label>Garantia até</label><input type="date" name="garantia_ate" value="${esc(e.garantia_ate || '')}"></div>
       </div>
+      ${e.posicao_id ? '' : campoLocal('local_armazenamento', 'Onde a peça está (fora de posição)', e.local_armazenamento || '')}
       <div class="campo"><label>Observações</label><textarea name="observacoes" rows="3">${esc(e.observacoes || '')}</textarea></div>`,
       'Salvar', async form => {
         const f = new FormData(form); const novo = { ...dp };
@@ -720,7 +731,8 @@ function acoesEquip(acao, e) {
         await q(sb.from('equipamentos').update({
           dados_placa: novo, ano_fabricacao: n('ano_fabricacao') ? Number(n('ano_fabricacao')) : null,
           data_recebimento: n('data_recebimento'), nota_fiscal: n('nota_fiscal'), fornecedor: n('fornecedor'),
-          garantia_ate: n('garantia_ate'), observacoes: n('observacoes')
+          garantia_ate: n('garantia_ate'), observacoes: n('observacoes'),
+          ...(e.posicao_id ? {} : { local_armazenamento: n('local_armazenamento') })
         }).eq('id', e.id).select('id').single());
         invalidar(); toast('Dados atualizados.'); return true;
       });
@@ -748,11 +760,13 @@ function acoesEquip(acao, e) {
         <div class="campo"><label>Data</label><input type="date" name="data" value="${hoje()}" max="${hoje()}" required></div>
         <div class="campo"><label>Fica com o status</label><select name="status">${ops.map(s => `<option value="${s.codigo}" ${s.codigo === 'RETIRADO' ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>
       </div>
-      <div class="campo"><label>Responsável</label><input name="responsavel" value="${esc(S.perfil.nome)}" required></div>`,
+      <div class="campo"><label>Responsável</label><input name="responsavel" value="${esc(S.perfil.nome)}" required></div>
+      ${campoLocal('local', 'Para onde a peça vai')}`,
       'Retirar', async form => {
         const f = new FormData(form);
         await q(sb.rpc('retirar_equipamento', { p_equipamento_id: e.id, p_motivo: f.get('motivo').trim(),
           p_responsavel: f.get('responsavel').trim(), p_data: dataParaTs(f.get('data')), p_novo_status: f.get('status') }));
+        await gravarLocal(e.id, (f.get('local') || '').trim());
         invalidar(); toast('Peça retirada da posição.'); return true;
       });
   }
@@ -767,7 +781,7 @@ async function telaBusca() {
   const limpo = termo.replace(/[,()*%\\]/g, ' ').trim();
   if (limpo || filtroBusca !== 'todos') {
     let qb = sb.from('vw_equipamentos').select('id,tag_rastreio,tipo_codigo,numero_serie,sn_pendente,fabricante,status_codigo,posicao_id,tag_local,posicao_descricao,sn_observacao,observacoes');
-    if (limpo) qb = qb.or(['numero_serie','tag_rastreio','fabricante','tag_local','tag_consorcio'].map(c => `${c}.ilike.*${limpo}*`).join(','));
+    if (limpo) qb = qb.or(['numero_serie','tag_rastreio','fabricante','tag_local','tag_consorcio','local_armazenamento'].map(c => `${c}.ilike.*${limpo}*`).join(','));
     if (filtroBusca === 'semsn') qb = qb.is('numero_serie', null);
     if (filtroBusca === 'defeito') qb = qb.in('status_codigo', DEFEITO);
     if (filtroBusca === 'estoque') qb = qb.is('posicao_id', null).neq('status_codigo', 'BAIXADO');
@@ -781,7 +795,7 @@ async function telaBusca() {
   }
   return moldura('busca', `
     <h1>Buscar</h1>
-    <form class="busca" id="fbusca"><input name="q" value="${esc(termo)}" placeholder="SN, TAG de rastreio, TAG CEDAE ou local (ex.: B01, B01-EAD1, XV-049)" autocomplete="off" enterkeyhint="search"><button class="bt pri">Buscar</button></form>
+    <form class="busca" id="fbusca"><input name="q" value="${esc(termo)}" placeholder="SN, TAG, TAG CEDAE, posição ou local (ex.: B01-EAD1, XV-049, Tenda 1269)" autocomplete="off" enterkeyhint="search"><button class="bt pri">Buscar</button></form>
     <div class="chips">${chips.map(([k,l]) => `<button class="chip ${filtroBusca === k ? 'on' : ''}" data-chip="${k}">${l}</button>`).join('')}</div>
     ${posicoesAchadas.length ? `<h2>Posições (${posicoesAchadas.length})</h2><div class="lista">${posicoesAchadas.map(p => `<a class="li" href="#/f/${esc(p.galeria)}/${p.filtro_numero}"><div style="flex:1"><b class="mono">${esc(p.tag_local)}</b> · ${esc(p.descricao)}</div><span class="sub">${p.tipos_previstos.length - p.tipos_pendentes.length}/${p.tipos_previstos.length}</span></a>`).join('')}</div>` : ''}
     ${(limpo || filtroBusca !== 'todos') ? `<h2>Equipamentos (${resultado.length}${resultado.length === 300 ? '+' : ''})</h2>
@@ -791,11 +805,16 @@ async function telaBusca() {
 /* ---------- estoque ---------- */
 async function telaEstoque() {
   const eq = await carregarEquip();
-  const fora = eq.filter(e => !e.posicao_id && e.status_codigo !== 'BAIXADO');
+  const filtroLocal = new URLSearchParams(location.hash.split('?')[1] || '').get('local') || '';
+  const todosFora = eq.filter(e => !e.posicao_id && e.status_codigo !== 'BAIXADO');
+  const porLocal = {}; todosFora.forEach(e => { const k = e.local_armazenamento || '(local não informado)'; porLocal[k] = (porLocal[k] || 0) + 1; });
+  const fora = todosFora.filter(e => !filtroLocal || (e.local_armazenamento || '(local não informado)') === filtroLocal);
   const porTipo = S.ref.tipos.map(t => [t, fora.filter(e => e.tipo_codigo === t.codigo)]).filter(([,l]) => l.length);
   return moldura('estoque', `
     <div class="linha"><h1>Estoque e peças fora de posição</h1><span class="esp"></span>${pode() ? '<button class="bt pri" data-receber>+ Receber peça</button>' : ''}</div>
     <div class="sub">Peças recebidas e ainda não instaladas, retiradas ou em manutenção.</div>
+    <div class="chips"><a class="chip ${!filtroLocal ? 'on' : ''}" href="#/estoque">Todos os locais (${todosFora.length})</a>${Object.entries(porLocal).sort().map(([k, n]) =>
+      `<a class="chip ${filtroLocal === k ? 'on' : ''}" href="#/estoque?local=${encodeURIComponent(k)}">📍 ${esc(k)} (${n})</a>`).join('')}</div>
     ${porTipo.map(([t, l]) => `<h2>${esc(t.nome)} (${l.length})</h2><div class="lista">${l.map(linhaEquip).join('')}</div>`).join('') || '<div class="lista" style="margin-top:14px"><div class="vazio">Nenhuma peça fora de posição.</div></div>'}`);
 }
 
@@ -818,13 +837,14 @@ function abrirReceber() {
       <div class="campo"><label>Fornecedor</label><input name="fornecedor"></div>
       <div class="campo"><label>Garantia até</label><input type="date" name="garantia_ate"></div>
     </div>
+    ${campoLocal('local_armazenamento', 'Onde a peça fica guardada', 'Almoxarifado')}
     <div class="campo"><label>Observações</label><textarea name="observacoes" rows="2"></textarea></div>`,
     'Cadastrar', async (form, erro) => {
       const f = new FormData(form); const t = f.get('tipo'); const tp = tipos.find(x => x.codigo === t);
       const sn = (f.get('sn') || '').replace(/\s+/g, '').toUpperCase(); const semSn = f.get('semsn') === 'on';
       const n = s => (f.get(s) || '').trim() || null;
       const reg = { tipo_codigo: t, fabricante_id: f.get('fab'), data_recebimento: n('data_recebimento'), nota_fiscal: n('nota_fiscal'),
-                    fornecedor: n('fornecedor'), garantia_ate: n('garantia_ate'), observacoes: n('observacoes') };
+                    fornecedor: n('fornecedor'), garantia_ate: n('garantia_ate'), observacoes: n('observacoes'), local_armazenamento: n('local_armazenamento') };
       if (semSn) {
         if (!n('motivo')) return erro('Informe o motivo da falta do SN.');
         Object.assign(reg, { situacao_sn: f.get('situacao'), sn_observacao: n('motivo') });
@@ -1029,6 +1049,7 @@ async function abrirSubstituir(e) {
       <div class="campo"><label>A peça retirada fica</label><select name="stSai">${saida.map(s => `<option value="${s.codigo}" ${s.codigo === 'SUBSTITUIDO' ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>
       <div class="campo"><label>A peça nova entra</label><select name="stEntra"><option value="EM_OPERACAO">Em operação</option><option value="INSTALADO_NAO_COMISSIONADO">Instalado — não comissionado</option></select></div>
     </div>
+    ${campoLocal('local', 'Para onde vai a peça retirada', /COESTER/i.test(e.fabricante) ? '' : '')}
     <div class="campo"><label>Observações (opcional)</label><textarea name="obs" rows="2"></textarea></div>
     ${campoFotos()}`,
     'Substituir', async (form, erro) => {
@@ -1045,6 +1066,7 @@ async function abrirSubstituir(e) {
       if (!confirm(`Confirma a substituição de ${e.tag_rastreio} em ${e.tag_local}? Ela não pode ser desfeita (fica no histórico).`)) return false;
       const r1 = await q(sb.rpc('substituir_peca', { p_equipamento_antigo_id: e.id, p_novo: novo, p_motivo: f.get('motivo').trim(), p_responsavel: f.get('resp').trim(),
         p_data: dataParaTs(f.get('data')), p_status_retirado: f.get('stSai'), p_status_novo: f.get('stEntra'), p_ocorrencia_id: f.get('oc') || null, p_observacoes: (f.get('obs') || '').trim() || null }));
+      await gravarLocal(e.id, (f.get('local') || '').trim());
       const r = await enviarAnexos([...form.querySelector('[name=fotos]').files], { equipamento_id: e.id, substituicao_id: r1.substituicao_id }, 'FOTO', 'Substituição');
       invalidar(); toast(`Substituída. Peça nova: ${r1.tag_rastreio}` + avisoFotos(r, 'A substituição foi registrada') + '.'); return true;
     }, el => {
@@ -1159,7 +1181,7 @@ async function telaRelatorio() {
     ${linhas.map(e => { const s = stInfo(e.status_codigo); return `<tr>
       <td class="sn">${esc(e.tag_rastreio)}</td><td>${esc(tipoNome(e.tipo_codigo))}</td><td>${esc(e.fabricante)}${e.modelo ? '<span class="s">' + esc(e.modelo) + '</span>' : ''}</td>
       <td class="sn">${e.numero_serie ? esc(e.numero_serie) : '<span class="fl">' + esc(SITUACAO_SN[e.situacao_sn] || 'pendente') + '</span>'}</td>
-      <td>${e.tag_local ? `<span class="sn">${esc(e.tag_local)}</span><span class="s">${esc(e.posicao_descricao || '')}</span>` : '<span class="fl">fora de posição</span>'}</td>
+      <td>${e.tag_local ? `<span class="sn">${esc(e.tag_local)}</span><span class="s">${esc(e.posicao_descricao || '')}</span>` : '<span class="fl">fora de posição</span>' + (e.local_armazenamento ? '<span class="s">📍 ' + esc(e.local_armazenamento) + '</span>' : '')}</td>
       <td class="rx">${esc(e.tag_consorcio || '—')}</td>
       <td><span class="s sit"><i style="--c:${esc(s.cor)}"></i>${esc(s.nome)}</span></td>
       <td>${e.instalado_em ? fmtD(e.instalado_em) + (e.instalacao_data_estimada ? '<span class="s">estimada</span>' : '') : '—'}</td><td>${e.total_ocorrencias ? `${e.total_ocorrencias} (${e.ocorrencias_abertas})` : '—'}</td><td>${esc(e.nota_fiscal || '—')}</td></tr>`; }).join('')}
@@ -1234,13 +1256,13 @@ function exportarCSV() {
   const peca = (p, k) => !p.tipos_previstos.includes(k.toUpperCase()) ? ['n/a',''] : !p[k + '_id'] ? ['não instalado',''] : [p[k + '_sn'] || 'SN pendente', stInfo(p[k + '_status']).nome];
   const cab = pr.modo === 'posicao'
     ? ['Galeria','Filtro','Item','Posição','Nível','TAG local','TAG CEDAE','Válvula SN','Válvula status','Válvula fabricante','Atuador SN','Atuador status','Atuador fabricante','Redutor SN','Redutor status','Redutor fabricante','Situação','Falta','Ocorrências abertas']
-    : ['TAG rastreio','Tipo','Fabricante','Modelo','SN','Situação SN','TAG local','Posição','TAG CEDAE','Status','Instalado em','Data estimada','Ocorrências','Ocorrências abertas','Nota fiscal','Garantia até'];
+    : ['TAG rastreio','Tipo','Fabricante','Modelo','SN','Situação SN','TAG local','Posição','Local (fora de posição)','TAG CEDAE','Status','Instalado em','Data estimada','Ocorrências','Ocorrências abertas','Nota fiscal','Garantia até'];
   const rows = linhas.map(x => pr.modo === 'posicao'
     ? [x.galeria, x.filtro, x.item, x.descricao, x.nivel, x.tag_local, x.tag_consorcio,
        ...peca(x,'valvula'), x.valvula_fabricante, ...peca(x,'atuador'), x.atuador_fabricante, ...peca(x,'redutor'), x.redutor_fabricante,
        SIT_POS[situacaoPos(x)][0], x.tipos_pendentes.map(tipoNome).join(', '), x.ocorrencias_abertas]
     : [x.tag_rastreio, tipoNome(x.tipo_codigo), x.fabricante, x.modelo, x.numero_serie, x.numero_serie ? 'Informado' : (SITUACAO_SN[x.situacao_sn] || 'Pendente'),
-       x.tag_local, x.posicao_descricao, x.tag_consorcio, stInfo(x.status_codigo).nome, x.instalado_em ? fmtD(x.instalado_em) : '', x.instalado_em ? (x.instalacao_data_estimada ? 'Sim' : 'Não') : '',
+       x.tag_local, x.posicao_descricao, x.tag_local ? '' : (x.local_armazenamento || ''), x.tag_consorcio, stInfo(x.status_codigo).nome, x.instalado_em ? fmtD(x.instalado_em) : '', x.instalado_em ? (x.instalacao_data_estimada ? 'Sim' : 'Não') : '',
        x.total_ocorrencias, x.ocorrencias_abertas, x.nota_fiscal, x.garantia_ate ? fmtD(x.garantia_ate) : '']);
   const cel = v => { const t = String(v ?? ''); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
   const txt = [[`Relatório consolidado de equipamentos — ${S.ref.obras[0]?.nome || ''}`], [`Emitido em ${fmtDH(new Date().toISOString())} por ${emitidoPor()} — Filtros: ${descFiltros}`], [], cab, ...rows]
