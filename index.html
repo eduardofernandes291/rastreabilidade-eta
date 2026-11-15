@@ -241,7 +241,7 @@ table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
    ===================================================================== */
 const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
-const VERSAO = 'v0.7 · Ocorrências, fotos, substituição e backup';
+const VERSAO = 'v0.8 · Histórico da enchente (data a confirmar)';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -911,13 +911,14 @@ function cardOcorrencia(o, anexosOc, urls, comAcoes = true, cabecalhoPeca = '') 
     <div class="oc-cab"><span class="oc-cod">${esc(o.codigo_oc)}</span><span class="tg">${esc(o.tipo_nome)}</span>
       <span class="tg grav-${esc(o.gravidade)}">${esc(GRAV[o.gravidade] || o.gravidade)}</span>
       <span class="tg ${enc ? 'ok' : 'warn'}">${enc ? 'Encerrada' : (o.situacao === 'EM_ANDAMENTO' ? 'Em andamento' : 'Aberta')}</span>
-      <span class="esp"></span><span class="sub">${fmtDH(o.data_ocorrencia)} · ${esc(o.responsavel)}</span></div>
+      <span class="esp"></span><span class="sub">${o.data_a_confirmar ? '<span class="tg warn">data a confirmar</span>' : fmtDH(o.data_ocorrencia)} · ${esc(o.responsavel)}</span></div>
     ${cabecalhoPeca}<div class="oc-tit">${esc(o.titulo)}</div>
     <div class="oc-txt">${esc(o.descricao)}</div>
     ${o.tag_local ? `<div class="sub" style="margin-top:4px">Local na época: <b class="mono">${esc(o.tag_local)}</b> · ${esc(o.posicao_descricao || '')}</div>` : ''}
     ${enc ? `<div class="oc-acao"><b>Encerrada em ${fmtDH(o.encerrada_em)}:</b> ${esc(o.acao_tomada)}</div>` : ''}
     ${galeriaAnexos(anexosOc, urls)}
     ${comAcoes && pode() ? `<div class="linha" style="margin-top:8px"><button class="bt peq" data-oc-foto="${o.id}">📷 Anexar foto</button>
+      ${o.data_a_confirmar ? `<button class="bt peq" data-oc-data="${o.id}">📅 Informar data</button>` : ''}
       ${enc ? '' : `<button class="bt peq" data-oc-encerrar="${o.id}">✓ Encerrar</button>`}</div>` : ''}
   </div>`;
 }
@@ -972,6 +973,18 @@ function abrirEncerrar(o) {
       const r = await enviarAnexos([...form.querySelector('[name=fotos]').files], { equipamento_id: e.id, ocorrencia_id: o.id }, 'FOTO', 'Encerramento');
       invalidar(); toast('Ocorrência encerrada' + avisoFotos(r, 'A ocorrência foi encerrada') + '.'); return true;
     }, ligarPrevia);
+}
+function abrirDataOcorrencia(o) {
+  modal('Data de ' + o.codigo_oc, `<div class="info">A data desta ocorrência está <b>a confirmar</b>. Ela pode ser informada <b>uma única vez</b>; depois fica travada. A fonte fica registrada na descrição.</div>
+    <div data-erro></div>
+    <div class="campo"><label>Data da ocorrência</label><input type="date" name="data" max="${hoje()}" required></div>
+    <div class="campo"><label>De onde veio essa data</label><input name="fonte" required placeholder="Ex.: boletim da Defesa Civil, diário de obra, foto datada"></div>`,
+    'Gravar data', async form => {
+      const f = new FormData(form);
+      if (!confirm('Confirma a data ' + fmtD(f.get('data')) + '? Depois de gravada ela não poderá mais ser alterada.')) return false;
+      await q(sb.rpc('confirmar_data_ocorrencia', { p_ocorrencia_id: o.id, p_data: f.get('data') + 'T12:00:00-03:00', p_fonte: f.get('fonte').trim() }));
+      invalidar(); toast('Data da ocorrência gravada.'); return true;
+    });
 }
 function abrirAnexar(e, ocorrenciaId) {
   modal(ocorrenciaId ? 'Anexar foto à ocorrência' : 'Anexar foto / documento', `<div data-erro></div>
@@ -1363,10 +1376,11 @@ async function rotear() {
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao],[data-nome],[data-oc-foto],[data-oc-encerrar],[data-backup],[data-novo-tipo]');
+  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao],[data-nome],[data-oc-foto],[data-oc-encerrar],[data-oc-data],[data-backup],[data-novo-tipo]');
   if (!t) return;
   if ('pdf' in t.dataset) return window.print();
   if (t.dataset.ocFoto) { ev.preventDefault(); return abrirAnexar(equipAtual, t.dataset.ocFoto); }
+  if (t.dataset.ocData) { ev.preventDefault(); return abrirDataOcorrencia((S.ocsAtual || []).find(o => o.id === t.dataset.ocData)); }
   if (t.dataset.ocEncerrar) { ev.preventDefault(); return abrirEncerrar((S.ocsAtual || []).find(o => o.id === t.dataset.ocEncerrar)); }
   if ('backup' in t.dataset) return baixarBackup(t);
   if ('novoTipo' in t.dataset) return novoTipoOcorrencia();
