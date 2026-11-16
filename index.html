@@ -241,7 +241,7 @@ table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
    ===================================================================== */
 const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
-const VERSAO = 'v1.0 · Modelos de atuador e redutor';
+const VERSAO = 'v1.1 · Relatório por ocorrência e peças com problema';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -1130,9 +1130,17 @@ const SIT_POS = {
 function parametrosRel() {
   const u = new URLSearchParams(location.hash.split('?')[1] || '');
   return { modo: u.get('modo') || 'posicao', g: u.get('g') || '', f: u.get('f') || '', tipo: u.get('tipo') || '',
-           sit: u.get('sit') || '', fab: u.get('fab') || '', folha: u.get('folha') || 'paisagem', vazias: u.get('vazias') || 'ocultar' };
+           sit: u.get('sit') || '', fab: u.get('fab') || '', folha: u.get('folha') || 'paisagem', vazias: u.get('vazias') || 'ocultar',
+           toc: u.get('toc') || '', soc: u.get('soc') || '' };
 }
-function dadosRelatorio(pr, pos, eq) {
+const PROBLEMA = ['COM_DEFEITO', 'AGUARDANDO_MANUTENCAO', 'EM_MANUTENCAO'];
+function dadosRelatorio(pr, pos, eq, ocs) {
+  if (pr.modo === 'ocorrencia') {
+    return (ocs || []).filter(o => (!pr.g || o.galeria === pr.g) && (!pr.f || String(o.filtro_numero) === pr.f)
+      && (!pr.toc || o.categoria === pr.toc) && (!pr.tipo || o.equipamento_tipo === pr.tipo)
+      && (!pr.soc || (pr.soc === 'abertas' ? o.situacao !== 'ENCERRADA' : o.situacao === 'ENCERRADA')))
+      .sort((a, b) => String(a.tag_local || 'ZZZ').localeCompare(String(b.tag_local || 'ZZZ')) || a.numero - b.numero);
+  }
   if (pr.modo === 'posicao') {
     return pos.filter(p => (!pr.g || p.galeria === pr.g) && (!pr.f || String(p.filtro_numero) === pr.f)
       && (!pr.sit || situacaoPos(p) === pr.sit)
@@ -1142,20 +1150,25 @@ function dadosRelatorio(pr, pos, eq) {
   }
   return eq.filter(e => (!pr.g || e.galeria === pr.g) && (!pr.f || Number(String(e.filtro || '').replace(/\D/g,'')) === Number(pr.f))
     && (!pr.tipo || e.tipo_codigo === pr.tipo) && (!pr.fab || e.fabricante === pr.fab)
-    && (!pr.sit || (pr.sit === 'SN_PENDENTE' ? e.sn_pendente : pr.sit === 'FORA' ? !e.posicao_id : e.status_codigo === pr.sit)))
+    && (!pr.sit || (pr.sit === 'SN_PENDENTE' ? e.sn_pendente : pr.sit === 'FORA' ? !e.posicao_id
+         : pr.sit === 'PROBLEMA' ? PROBLEMA.includes(e.status_codigo) : pr.sit === 'COM_OC' ? Number(e.ocorrencias_abertas) > 0 : e.status_codigo === pr.sit)))
     .sort((a, b) => String(a.tag_local || 'ZZZ').localeCompare(String(b.tag_local || 'ZZZ')) || a.tag_rastreio.localeCompare(b.tag_rastreio));
 }
 async function telaRelatorio() {
   const pr = parametrosRel();
-  const [pos, eq] = await Promise.all([carregarPosicoes(), carregarEquip()]);
-  const linhas = dadosRelatorio(pr, pos, eq);
+  const [pos, eq, ocs, tiposOc] = await Promise.all([carregarPosicoes(), carregarEquip(),
+    pr.modo === 'ocorrencia' ? buscarTodos(() => sb.from('vw_ocorrencias').select('*').order('numero', { ascending:true })) : Promise.resolve([]),
+    tiposOcorrencia()]);
+  const linhas = dadosRelatorio(pr, pos, eq, ocs);
+  const eqPorId = Object.fromEntries(eq.map(e => [e.id, e]));
   definirFolha(pr.folha);
   const galerias = [...new Set(pos.filter(p => p.galeria).map(p => p.galeria))];
   const filtrosN = [...new Set(pos.filter(p => !pr.g || p.galeria === pr.g).map(p => p.filtro_numero).filter(Boolean))].sort((a,b) => a - b);
   const sel = (nome, rot, ops) => `<div class="campo"><label>${rot}</label><select data-relf="${nome}">${ops.map(([v,l]) => `<option value="${esc(v)}" ${String(pr[nome]) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
   const opsSit = pr.modo === 'posicao'
     ? [['','Todas'], ...Object.entries(SIT_POS).map(([k,[l]]) => [k, l])]
-    : [['','Todos'], ...S.ref.status.map(s => [s.codigo, s.nome]), ['SN_PENDENTE','SN pendente'], ['FORA','Fora de posição']];
+    : [['','Todos'], ['PROBLEMA','⚠ Com problema (defeito, aguardando ou em manutenção)'], ['COM_OC','Com ocorrência aberta'],
+       ...S.ref.status.map(s => [s.codigo, s.nome]), ['SN_PENDENTE','SN pendente'], ['FORA','Fora de posição']];
 
   // resumo quantitativo (sobre o recorte de galeria/filtro)
   const recorte = pos.filter(p => (!pr.g || p.galeria === pr.g) && (!pr.f || String(p.filtro_numero) === pr.f));
@@ -1169,8 +1182,17 @@ async function telaRelatorio() {
     [eqRecorte.filter(e => e.sn_pendente).length, 'SN pendente'],
     [eqRecorte.reduce((n, e) => n + Number(e.ocorrencias_abertas || 0), 0), 'Ocorrências abertas']
   ];
+  if (pr.modo === 'ocorrencia') {
+    const pecas = [...new Set(linhas.map(o => o.equipamento_id))].map(id => eqPorId[id]).filter(Boolean);
+    kp.splice(0, kp.length,
+      [linhas.length, 'Ocorrências'], [linhas.filter(o => o.situacao !== 'ENCERRADA').length, 'Abertas / em andamento'],
+      [linhas.filter(o => o.situacao === 'ENCERRADA').length, 'Encerradas'], [linhas.filter(o => o.data_a_confirmar).length, 'Data a confirmar'],
+      [pecas.length, 'Peças envolvidas'], [pecas.filter(e => e.posicao_id).length, 'Hoje instaladas'], [pecas.filter(e => !e.posicao_id).length, 'Hoje fora de posição']);
+  }
   const descFiltros = [pr.g && 'Galeria ' + pr.g, pr.f && 'Filtro ' + (pr.g || '') + String(pr.f).padStart(2,'0'), pr.tipo && tipoNome(pr.tipo),
-    pr.fab, pr.sit && (pr.modo === 'posicao' ? SIT_POS[pr.sit]?.[0] : (stInfo(pr.sit).nome !== pr.sit ? stInfo(pr.sit).nome : opsSit.find(o => o[0] === pr.sit)?.[1]))]
+    pr.modo === 'ocorrencia' && pr.toc && (tiposOc.find(t => t.codigo === pr.toc)?.nome || pr.toc),
+    pr.modo === 'ocorrencia' && pr.soc && (pr.soc === 'abertas' ? 'Abertas / em andamento' : 'Encerradas'),
+    pr.modo !== 'ocorrencia' && pr.fab, pr.modo !== 'ocorrencia' && pr.sit && (pr.modo === 'posicao' ? SIT_POS[pr.sit]?.[0] : (stInfo(pr.sit).nome !== pr.sit ? stInfo(pr.sit).nome : opsSit.find(o => o[0] === pr.sit)?.[1]))]
     .filter(Boolean).join(' · ') || 'Todos os registros';
 
   const celPeca = (p, k) => {
@@ -1179,7 +1201,23 @@ async function telaRelatorio() {
     const s = stInfo(p[k + '_status']);
     return `<td><span class="sn">${p[k + '_sn'] ? esc(p[k + '_sn']) : 'SN pendente'}</span><span class="s"><i style="--c:${esc(s.cor)}"></i>${esc(s.nome)}</span></td>`;
   };
-  const tabela = pr.modo === 'posicao' ? `
+  const ondeHoje = e => !e ? '—' : e.tag_local ? `<span class="sn">${esc(e.tag_local)}</span><span class="s">instalada</span>`
+    : '<span class="fl">fora de posição</span>' + (e.local_armazenamento ? '<span class="s">📍 ' + esc(e.local_armazenamento) + '</span>' : '<span class="s">local a confirmar</span>');
+  const tabelaOc = () => `
+    <table class="rel"><thead><tr><th>Ocorrência</th><th>Tipo / gravidade</th><th>Situação</th><th>Data</th><th>Peça</th>
+      <th>Posição na época</th><th>Onde está hoje</th><th>Status atual</th><th>Resumo</th></tr></thead><tbody>
+    ${linhas.map(o => { const e = eqPorId[o.equipamento_id]; const st = stInfo(e?.status_codigo || o.status_codigo); return `<tr>
+      <td class="sn">${esc(o.codigo_oc)}</td>
+      <td>${esc(o.tipo_nome)}<span class="s">${esc(GRAV[o.gravidade] || o.gravidade)}</span></td>
+      <td>${o.situacao === 'ENCERRADA' ? 'Encerrada' + (o.encerrada_em ? '<span class="s">' + fmtD(o.encerrada_em) + '</span>' : '') : o.situacao === 'EM_ANDAMENTO' ? 'Em andamento' : 'Aberta'}</td>
+      <td>${o.data_a_confirmar ? '<span class="fl">a confirmar</span>' : fmtD(o.data_ocorrencia)}</td>
+      <td><span class="sn">${esc(o.tag_rastreio)}</span><span class="s">${esc(tipoNome(o.equipamento_tipo))} · SN ${esc(o.numero_serie || 'pendente')}</span></td>
+      <td>${o.tag_local ? `<span class="sn">${esc(o.tag_local)}</span><span class="s">${esc(o.posicao_descricao || '')}</span>` : '—'}</td>
+      <td>${ondeHoje(e)}</td>
+      <td><span class="s sit"><i style="--c:${esc(st.cor)}"></i>${esc(st.nome)}</span></td>
+      <td>${esc(o.titulo)}${o.acao_tomada ? '<span class="s">Ação: ' + esc(o.acao_tomada) + '</span>' : ''}</td></tr>`; }).join('')}
+    </tbody></table>`;
+  const tabela = pr.modo === 'ocorrencia' ? tabelaOc() : pr.modo === 'posicao' ? `
     <table class="rel"><thead><tr><th class="rx">Gal.</th><th class="rx">Filtro</th><th>Item</th><th>Posição</th><th>TAG local</th><th class="rx">TAG CEDAE</th>
       <th>Válvula (SN)</th><th>Atuador (SN)</th><th>Redutor (SN)</th><th>Situação</th><th>Ocorr.</th></tr></thead><tbody>
     ${linhas.map(p => { const [sl, sc] = SIT_POS[situacaoPos(p)]; return `<tr>
@@ -1200,7 +1238,7 @@ async function telaRelatorio() {
       <td>${e.instalado_em ? fmtD(e.instalado_em) + (e.instalacao_data_estimada ? '<span class="s">estimada</span>' : '') : '—'}</td><td>${e.total_ocorrencias ? `${e.total_ocorrencias} (${e.ocorrencias_abertas})` : '—'}</td><td>${esc(e.nota_fiscal || '—')}</td></tr>`; }).join('')}
     </tbody></table>`;
 
-  S.ultimoRel = { pr, linhas, descFiltros };
+  S.ultimoRel = { pr, linhas, descFiltros, eqPorId };
   const obra = S.ref.obras[0];
   return moldura('relatorio', `
     <div class="nao-imprimir">
@@ -1208,12 +1246,14 @@ async function telaRelatorio() {
         <button class="bt" data-csv>⬇ Excel (CSV)</button><button class="bt pri" data-pdf>🖨 Gerar PDF</button></div>
       <div class="sub">Escolha os filtros; o PDF e o Excel saem exatamente com o que está na tela.</div>
       <div class="filtros-rel">
-        ${sel('modo', 'Relatório por', [['posicao','Posição (conjunto)'],['equipamento','Equipamento (peça)']])}
+        ${sel('modo', 'Relatório por', [['posicao','Posição (conjunto)'],['equipamento','Equipamento (peça)'],['ocorrencia','Ocorrência']])}
         ${sel('g', 'Galeria', [['','Todas'], ...galerias.map(g => [g, 'Galeria ' + g])])}
         ${sel('f', 'Filtro', [['','Todos'], ...filtrosN.map(n => [String(n), (pr.g || 'Filtro ') + String(n).padStart(2,'0')])])}
-        ${sel('tipo', 'Tipo', [['','Todos'], ...S.ref.tipos.map(t => [t.codigo, t.nome])])}
-        ${sel('fab', 'Fabricante', [['','Todos'], ...S.ref.fabricantes.map(f => [f.nome, f.nome])])}
-        ${sel('sit', pr.modo === 'posicao' ? 'Situação' : 'Status', opsSit)}
+        ${pr.modo === 'ocorrencia' ? sel('toc', 'Tipo de ocorrência', [['','Todos'], ...tiposOc.map(t => [t.codigo, t.nome])]) : ''}
+        ${pr.modo === 'ocorrencia' ? sel('soc', 'Situação da ocorrência', [['','Todas'], ['abertas','Abertas / em andamento'], ['encerradas','Encerradas']]) : ''}
+        ${sel('tipo', pr.modo === 'ocorrencia' ? 'Tipo de peça' : 'Tipo', [['','Todos'], ...S.ref.tipos.map(t => [t.codigo, t.nome])])}
+        ${pr.modo !== 'ocorrencia' ? sel('fab', 'Fabricante', [['','Todos'], ...S.ref.fabricantes.map(f => [f.nome, f.nome])]) : ''}
+        ${pr.modo !== 'ocorrencia' ? sel('sit', pr.modo === 'posicao' ? 'Situação' : 'Status', opsSit) : ''}
         ${pr.modo === 'posicao' ? sel('vazias', 'Posições aguardando instalação', [['ocultar','Ocultar'],['mostrar','Mostrar']]) : ''}
         ${sel('folha', 'Folha do PDF', [['paisagem','Deitada (recomendado)'],['retrato','Em pé']])}
         <div class="campo"><label>Emitido por (sai no PDF)</label><input data-emitido value="${esc(emitidoPor())}" placeholder="Ex.: Eduardo Fernandes — Qualidade"></div>
@@ -1228,14 +1268,14 @@ async function telaRelatorio() {
       </details>
     </div>
     <div class="so-impressao rel-cab">
-      <div><h1>Relatório Consolidado de Equipamentos</h1>
+      <div><h1>${pr.modo === 'ocorrencia' ? 'Relatório de Ocorrências' : 'Relatório Consolidado de Equipamentos'}</h1>
         <div class="sub">${esc(obra?.nome || '')} · Rastreabilidade de válvulas, atuadores e redutores</div></div>
       <div class="meta">Emitido em ${fmtDH(new Date().toISOString())}<br>por <span data-emitido-pdf>${esc(emitidoPor())}</span><br>Filtros: ${esc(descFiltros)}</div>
     </div>
     <div class="so-impressao" style="font-weight:700;font-size:12px">1. Resumo quantitativo</div>
     <div class="rel-kpis">${kp.map(([n,l]) => `<div><b>${n}</b><span>${l}</span></div>`).join('')}</div>
-    <div class="so-impressao" style="font-weight:700;font-size:12px;margin-bottom:6px">2. Relação detalhada — ${linhas.length} ${pr.modo === 'posicao' ? 'posições' : 'equipamentos'}</div>
-    <div class="sub nao-imprimir" style="margin-bottom:6px">${linhas.length} ${pr.modo === 'posicao' ? 'posições' : 'equipamentos'} · ${esc(descFiltros)}</div>
+    <div class="so-impressao" style="font-weight:700;font-size:12px;margin-bottom:6px">2. Relação detalhada — ${linhas.length} ${pr.modo === 'posicao' ? 'posições' : pr.modo === 'ocorrencia' ? 'ocorrências' : 'equipamentos'}</div>
+    <div class="sub nao-imprimir" style="margin-bottom:6px">${linhas.length} ${pr.modo === 'posicao' ? 'posições' : pr.modo === 'ocorrencia' ? 'ocorrências' : 'equipamentos'} · ${esc(descFiltros)}</div>
     <div class="rel-wrap">${linhas.length ? tabela : '<div class="vazio">Nenhum registro com esses filtros.</div>'}</div>
     ${(() => { const a = assinaturas().filter(x => x.cargo.trim());
       return a.length ? `<div class="so-impressao assin" style="--n:${a.length}">${a.map(x => `<div>${x.nome.trim() ? `<b>${esc(x.nome)}</b>` : '<b>&nbsp;</b>'}${esc(x.cargo)}<div class="dt">Data: ____/____/______</div></div>`).join('')}</div>` : ''; })()}`);
@@ -1265,12 +1305,21 @@ function definirFolha(folha) {
   document.body.classList.toggle('retrato', folha === 'retrato');
 }
 function exportarCSV() {
-  const { pr, linhas, descFiltros } = S.ultimoRel;
+  const { pr, linhas, descFiltros, eqPorId } = S.ultimoRel;
   const peca = (p, k) => !p.tipos_previstos.includes(k.toUpperCase()) ? ['n/a',''] : !p[k + '_id'] ? ['não instalado',''] : [p[k + '_sn'] || 'SN pendente', stInfo(p[k + '_status']).nome];
-  const cab = pr.modo === 'posicao'
+  const cab = pr.modo === 'ocorrencia'
+    ? ['Ocorrência','Tipo','Gravidade','Situação','Data','Data a confirmar','Encerrada em','Peça (TAG)','Tipo de peça','SN','Posição na época','Descrição da posição',
+       'Hoje: posição','Hoje: local (fora de posição)','Status atual','Título','Descrição','Ação tomada','Responsável']
+    : pr.modo === 'posicao'
     ? ['Galeria','Filtro','Item','Posição','Nível','TAG local','TAG CEDAE','Válvula SN','Válvula status','Válvula fabricante','Atuador SN','Atuador status','Atuador fabricante','Redutor SN','Redutor status','Redutor fabricante','Situação','Falta','Ocorrências abertas']
     : ['TAG rastreio','Tipo','Fabricante','Modelo','SN','Situação SN','TAG local','Posição','Local (fora de posição)','TAG CEDAE','Status','Instalado em','Data estimada','Ocorrências','Ocorrências abertas','Nota fiscal','Garantia até'];
-  const rows = linhas.map(x => pr.modo === 'posicao'
+  const rows = linhas.map(x => pr.modo === 'ocorrencia'
+    ? (e => [x.codigo_oc, x.tipo_nome, GRAV[x.gravidade] || x.gravidade, x.situacao === 'ENCERRADA' ? 'Encerrada' : x.situacao === 'EM_ANDAMENTO' ? 'Em andamento' : 'Aberta',
+        x.data_a_confirmar ? '' : fmtD(x.data_ocorrencia), x.data_a_confirmar ? 'Sim' : 'Não', x.encerrada_em ? fmtD(x.encerrada_em) : '',
+        x.tag_rastreio, tipoNome(x.equipamento_tipo), x.numero_serie, x.tag_local, x.posicao_descricao,
+        e?.tag_local || '', e && !e.tag_local ? (e.local_armazenamento || 'a confirmar') : '', stInfo(e?.status_codigo || x.status_codigo).nome,
+        x.titulo, x.descricao, x.acao_tomada, x.responsavel])(eqPorId[x.equipamento_id])
+    : pr.modo === 'posicao'
     ? [x.galeria, x.filtro, x.item, x.descricao, x.nivel, x.tag_local, x.tag_consorcio,
        ...peca(x,'valvula'), x.valvula_fabricante, ...peca(x,'atuador'), x.atuador_fabricante, ...peca(x,'redutor'), x.redutor_fabricante,
        SIT_POS[situacaoPos(x)][0], x.tipos_pendentes.map(tipoNome).join(', '), x.ocorrencias_abertas]
