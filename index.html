@@ -241,7 +241,7 @@ table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
    ===================================================================== */
 const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
-const VERSAO = 'v0.9 · Local das peças fora de posição';
+const VERSAO = 'v1.0 · Modelos de atuador e redutor';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -280,6 +280,7 @@ const nomeUsuario = id => S.ref.perfis.find(p => p.user_id === id)?.nome || (id 
 
 function msgErro(e) {
   const m = (e && (e.message || e.error_description || e.msg)) || String(e);
+  if (/modelos_fabricante_id_tipo_codigo_nome_key/.test(m)) return 'Esse modelo já está cadastrado para esse tipo e fabricante.';
   if (/ux_equipamentos_sn/.test(m)) return 'Já existe uma peça deste tipo e fabricante com este SN.\nConfira a placa. Se for a mesma peça, procure-a pela Busca.';
   if (/Invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
   if (/row-level security|permission denied/i.test(m)) return 'Você não tem permissão para esta operação.';
@@ -300,15 +301,16 @@ async function buscarTodos(fn) {
 
 /* ---------- carga de dados ---------- */
 async function carregarRef() {
-  const [tipos, status, fabricantes, obras, perfis] = await Promise.all([
+  const [tipos, status, fabricantes, obras, perfis, modelos] = await Promise.all([
     q(sb.from('tipos_equipamento').select('*')),
     q(sb.from('status_equipamento').select('*').order('ordem')),
     q(sb.from('fabricantes').select('*').order('nome')),
     q(sb.from('obras').select('*').order('codigo')),
     q(sb.from('perfis').select('*').order('nome')),
+    q(sb.from('modelos').select('*').order('nome')),
   ]);
   tipos.sort((a,b) => TIPOS_ORDEM.indexOf(a.codigo) - TIPOS_ORDEM.indexOf(b.codigo));
-  S.ref = { tipos, status, fabricantes, obras, perfis };
+  S.ref = { tipos, status, fabricantes, obras, perfis, modelos };
   S.perfil = perfis.find(p => p.user_id === S.sessao.user.id) || { nome: S.sessao.user.email, papel:'leitor' };
 }
 async function carregarPosicoes(forcar) {
@@ -416,6 +418,10 @@ async function telaPainel() {
     }).join('')}</div>`);
 }
 
+function opcoesModelo(tipo, fabricanteId, atualId) {
+  const ms = (S.ref.modelos || []).filter(m => m.tipo_codigo === tipo && m.fabricante_id === fabricanteId);
+  return `<option value="">A confirmar</option>` + ms.map(m => `<option value="${m.id}" ${m.id === atualId ? 'selected' : ''}>${esc(m.nome)}</option>`).join('');
+}
 function locaisConhecidos() {
   const padrao = ['Almoxarifado', 'Tenda 1269', 'Pipe Shop', 'Coester (assistência)'];
   return [...new Set([...padrao, ...(S.equip || []).map(e => e.local_armazenamento).filter(Boolean)])].sort((a, b) => a.localeCompare(b));
@@ -516,10 +522,11 @@ async function abrirRegistrar(posId) {
       ${est.length ? `<div class="seg"><label><input type="radio" name="${t}_modo" value="nova" checked><span>Nova peça</span></label><label><input type="radio" name="${t}_modo" value="estoque"><span>Do estoque (${est.length})</span></label></div>` : `<input type="hidden" name="${t}_modo" value="nova">`}
       <div data-painel="nova">
         <div class="dupla">
-          <div class="campo"><label>Fabricante</label><select name="${t}_fab">${fabOpts(t)}</select></div>
+          <div class="campo"><label>Fabricante</label><select name="${t}_fab" data-fab-de="${t}">${fabOpts(t)}</select></div>
           <div class="campo"><label>SN da placa</label><input class="sninput" name="${t}_sn" autocomplete="off" ${tp.formato_sn === '^[0-9]{5}$' ? 'inputmode="numeric" maxlength="5"' : ''} placeholder="${esc(tp.formato_sn_descricao ? tp.formato_sn_descricao.replace(/^.*ex\.:\s*/,'').replace(/\)$/,'') : '')}"></div>
         </div>
         ${tp.formato_sn_descricao ? `<div class="campo" style="margin-top:-8px"><span class="dica">Formato: ${esc(tp.formato_sn_descricao)}</span></div>` : ''}
+        <div class="campo"><label>Modelo</label><select name="${t}_modelo">${opcoesModelo(t, S.ref.fabricantes.find(f => f.nome === FAB_PADRAO[t])?.id || S.ref.fabricantes[0]?.id, null)}</select></div>
         <label class="chk"><input type="checkbox" name="${t}_semsn"> Sem SN (placa caiu, ilegível ou não conferida)</label>
         <div data-semsn class="hide">
           <div class="campo"><label>Situação</label><select name="${t}_situacao">${Object.entries(SITUACAO_SN).map(([k,v]) => `<option value="${k}" ${k === 'SEM_PLACA' ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
@@ -553,6 +560,7 @@ async function abrirRegistrar(posId) {
       const semSn = f.get(`${t}_semsn`) === 'on';
       if (!sn && !semSn) continue;
       const item = { tipo_codigo: t, fabricante_id: f.get(`${t}_fab`), dados_placa: {} };
+      if (f.get(`${t}_modelo`)) item.modelo_id = f.get(`${t}_modelo`);
       if (semSn) {
         const motivo = (f.get(`${t}_motivo`) || '').trim();
         if (!motivo) return mostrarErro(`${tp.nome}: informe o motivo da falta do SN.`);
@@ -578,6 +586,7 @@ async function abrirRegistrar(posId) {
   }, el => {
     el.querySelectorAll('fieldset.pc').forEach(fs => {
       fs.addEventListener('change', ev => {
+        if (ev.target.dataset?.fabDe) { const t2 = ev.target.dataset.fabDe; fs.querySelector(`[name=${t2}_modelo]`).innerHTML = opcoesModelo(t2, ev.target.value, null); }
         if (ev.target.name?.endsWith('_modo')) fs.querySelectorAll('[data-painel]').forEach(d => d.classList.toggle('hide', d.dataset.painel !== ev.target.value));
         if (ev.target.name?.endsWith('_semsn')) {
           fs.querySelector('[data-semsn]').classList.toggle('hide', !ev.target.checked);
@@ -629,6 +638,7 @@ async function telaEquip(id) {
       ${campo('SN da placa', e.numero_serie ? `<span class="mono" style="font-size:17px">${esc(e.numero_serie)}</span>` : `<span class="tg warn">${esc(SITUACAO_SN[e.situacao_sn] || 'Pendente')}</span>`)}
       ${e.sn_observacao ? campo('Observação do SN', esc(e.sn_observacao)) : ''}
       ${campo('TAG de rastreio', `<span class="mono">${esc(e.tag_rastreio)}</span>`)}
+      ${campo('Modelo', e.modelo ? esc(e.modelo) : '<span class="tg">a confirmar</span>')}
       ${campo('Localização atual', loc)}
       ${e.tag_consorcio ? campo('TAG CEDAE', esc(e.tag_consorcio)) : ''}
       ${e.instalado_em ? campo('Instalado desde', fmtD(e.instalado_em) + (e.instalacao_data_estimada ? ' <span class="tg warn">data estimada</span>' : '')) : ''}
@@ -714,6 +724,7 @@ function acoesEquip(acao, e) {
     const campos = (tp.campos_placa || []);
     const dp = e.dados_placa || {};
     modal('Editar dados', `<div data-erro></div>
+      <div class="campo"><label>Modelo (${esc(e.fabricante)})</label><select name="modelo_id">${opcoesModelo(e.tipo_codigo, e.fabricante_id, e.modelo_id)}</select></div>
       <div class="dupla">${campos.map(c => `<div class="campo"><label>${esc(ROTULO_CAMPO[c] || c)}</label><input name="pl_${c}" value="${esc(dp[c] ?? '')}"></div>`).join('')}</div>
       <div class="dupla">
         <div class="campo"><label>Ano de fabricação</label><input name="ano_fabricacao" inputmode="numeric" value="${esc(e.ano_fabricacao || '')}"></div>
@@ -729,7 +740,7 @@ function acoesEquip(acao, e) {
         for (const c of campos) { const v = (f.get('pl_' + c) || '').trim(); if (v) novo[c] = v; else delete novo[c]; }
         const n = s => (f.get(s) || '').trim() || null;
         await q(sb.from('equipamentos').update({
-          dados_placa: novo, ano_fabricacao: n('ano_fabricacao') ? Number(n('ano_fabricacao')) : null,
+          dados_placa: novo, modelo_id: n('modelo_id'), ano_fabricacao: n('ano_fabricacao') ? Number(n('ano_fabricacao')) : null,
           data_recebimento: n('data_recebimento'), nota_fiscal: n('nota_fiscal'), fornecedor: n('fornecedor'),
           garantia_ate: n('garantia_ate'), observacoes: n('observacoes'),
           ...(e.posicao_id ? {} : { local_armazenamento: n('local_armazenamento') })
@@ -825,6 +836,7 @@ function abrirReceber() {
       <div class="campo"><label>Tipo</label><select name="tipo">${tipos.map(t => `<option value="${t.codigo}">${esc(t.nome)}</option>`).join('')}</select></div>
       <div class="campo"><label>Fabricante</label><select name="fab">${S.ref.fabricantes.map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}</select></div>
     </div>
+    <div class="campo"><label>Modelo</label><select name="modelo"></select></div>
     <div class="campo"><label>SN da placa</label><input class="sninput" name="sn" autocomplete="off"><span class="dica" data-fmt></span></div>
     <label class="chk"><input type="checkbox" name="semsn"> Sem SN (placa caiu, ilegível ou não conferida)</label>
     <div data-semsn class="hide">
@@ -843,7 +855,7 @@ function abrirReceber() {
       const f = new FormData(form); const t = f.get('tipo'); const tp = tipos.find(x => x.codigo === t);
       const sn = (f.get('sn') || '').replace(/\s+/g, '').toUpperCase(); const semSn = f.get('semsn') === 'on';
       const n = s => (f.get(s) || '').trim() || null;
-      const reg = { tipo_codigo: t, fabricante_id: f.get('fab'), data_recebimento: n('data_recebimento'), nota_fiscal: n('nota_fiscal'),
+      const reg = { tipo_codigo: t, fabricante_id: f.get('fab'), modelo_id: n('modelo'), data_recebimento: n('data_recebimento'), nota_fiscal: n('nota_fiscal'),
                     fornecedor: n('fornecedor'), garantia_ate: n('garantia_ate'), observacoes: n('observacoes'), local_armazenamento: n('local_armazenamento') };
       if (semSn) {
         if (!n('motivo')) return erro('Informe o motivo da falta do SN.');
@@ -858,8 +870,9 @@ function abrirReceber() {
     }, el => {
       const fmt = () => { const tp = tipos.find(x => x.codigo === el.querySelector('[name=tipo]').value);
         el.querySelector('[data-fmt]').textContent = tp.formato_sn_descricao ? 'Formato: ' + tp.formato_sn_descricao : '';
-        const fab = S.ref.fabricantes.find(f => f.nome === FAB_PADRAO[tp.codigo]); if (fab) el.querySelector('[name=fab]').value = fab.id; };
-      el.querySelector('[name=tipo]').addEventListener('change', fmt); fmt();
+        const fab = S.ref.fabricantes.find(f => f.nome === FAB_PADRAO[tp.codigo]); if (fab) el.querySelector('[name=fab]').value = fab.id; mod(); };
+      const mod = () => { el.querySelector('[name=modelo]').innerHTML = opcoesModelo(el.querySelector('[name=tipo]').value, el.querySelector('[name=fab]').value, null); };
+      el.querySelector('[name=tipo]').addEventListener('change', fmt); el.querySelector('[name=fab]').addEventListener('change', mod); fmt();
       el.querySelector('[name=semsn]').addEventListener('change', ev => {
         el.querySelector('[data-semsn]').classList.toggle('hide', !ev.target.checked);
         el.querySelector('[name=sn]').disabled = ev.target.checked;
@@ -1276,6 +1289,7 @@ function exportarCSV() {
 
 /* ---------- conta ---------- */
 async function telaConta() {
+  if (pode()) await carregarEquip();
   if (admin()) S.ref.perfis = await q(sb.from('perfis').select('*').order('nome'));
   return moldura('conta', `
     <h1>Minha conta</h1>
@@ -1295,8 +1309,31 @@ async function telaConta() {
       <div class="medidor"><div class="sub">Baixa um arquivo com <b>todos os dados</b> (posições, peças, instalações, ocorrências, substituições, anexos e auditoria).
       Guarde em lugar seguro (computador, Drive, pen drive). As fotos em si ficam no Supabase; o arquivo guarda a lista e onde cada uma está.</div>
       <button class="bt pri" style="margin-top:10px" data-backup>⬇ Baixar backup completo</button></div>` : ''}
+    ${pode() ? blocoModelos() : ''}
     ${admin() ? await blocoAdmin() : ''}
     <div class="sub" style="margin-top:24px">${VERSAO}</div>`);
+}
+function blocoModelos() {
+  const eq = S.equip || [];
+  const linhas = (S.ref.modelos || []).slice().sort((a, b) => a.tipo_codigo.localeCompare(b.tipo_codigo) || a.nome.localeCompare(b.nome));
+  const conta = m => eq.filter(e => e.tipo_codigo === m.tipo_codigo && e.modelo === m.nome).length;
+  return `<h2>Modelos</h2>
+    <div class="lista"><table class="t"><thead><tr><th>Tipo</th><th>Fabricante</th><th>Modelo</th><th>Peças</th></tr></thead><tbody>
+    ${linhas.map(m => `<tr><td>${esc(tipoNome(m.tipo_codigo))}</td><td>${esc(S.ref.fabricantes.find(f => f.id === m.fabricante_id)?.nome || '')}</td><td><b>${esc(m.nome)}</b></td><td>${conta(m)}</td></tr>`).join('') || '<tr><td colspan="4">Nenhum modelo cadastrado.</td></tr>'}
+    </tbody></table></div>
+    <div class="linha" style="margin-top:8px"><button class="bt" data-novo-modelo>+ Novo modelo</button>
+      <span class="sub">O modelo de cada peça é escolhido no dossiê da peça › Editar dados.</span></div>`;
+}
+function novoModelo() {
+  modal('Novo modelo', `<div data-erro></div>
+    <div class="dupla"><div class="campo"><label>Tipo</label><select name="tipo">${S.ref.tipos.map(t => `<option value="${t.codigo}">${esc(t.nome)}</option>`).join('')}</select></div>
+      <div class="campo"><label>Fabricante</label><select name="fab">${S.ref.fabricantes.map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}</select></div></div>
+    <div class="campo"><label>Nome do modelo</label><input name="nome" required maxlength="60" placeholder="Ex.: CSR16"></div>`,
+    'Cadastrar', async form => {
+      const f = new FormData(form);
+      await q(sb.from('modelos').insert({ tipo_codigo: f.get('tipo'), fabricante_id: f.get('fab'), nome: f.get('nome').trim().toUpperCase() }).select('id').single());
+      await carregarRef(); toast('Modelo cadastrado.'); return true;
+    });
 }
 async function blocoAdmin() {
   const [anx, tipos] = await Promise.all([buscarTodos(() => sb.from('anexos').select('tamanho_bytes')), tiposOcorrencia()]);
@@ -1398,7 +1435,7 @@ async function rotear() {
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao],[data-nome],[data-oc-foto],[data-oc-encerrar],[data-oc-data],[data-backup],[data-novo-tipo]');
+  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao],[data-nome],[data-oc-foto],[data-oc-encerrar],[data-oc-data],[data-backup],[data-novo-tipo],[data-novo-modelo]');
   if (!t) return;
   if ('pdf' in t.dataset) return window.print();
   if (t.dataset.ocFoto) { ev.preventDefault(); return abrirAnexar(equipAtual, t.dataset.ocFoto); }
@@ -1406,6 +1443,7 @@ document.addEventListener('click', async ev => {
   if (t.dataset.ocEncerrar) { ev.preventDefault(); return abrirEncerrar((S.ocsAtual || []).find(o => o.id === t.dataset.ocEncerrar)); }
   if ('backup' in t.dataset) return baixarBackup(t);
   if ('novoTipo' in t.dataset) return novoTipoOcorrencia();
+  if ('novoModelo' in t.dataset) return novoModelo();
   if ('nome' in t.dataset) return modal('Alterar meu nome', `<div data-erro></div>
       <div class="info">É o nome que aparece nos relatórios, nas instalações e no histórico de alterações.</div>
       <div class="campo"><label>Nome</label><input name="nome" value="${esc(S.perfil.nome)}" maxlength="80" required placeholder="Ex.: Eduardo Fernandes"></div>`,
