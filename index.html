@@ -133,6 +133,20 @@ fieldset.pc legend{font-weight:700;padding:0 6px}
 /* modal e avisos */
 .fundo{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:4vh 12px}
 .modal{background:#fff;border-radius:16px;width:100%;max-width:560px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:92vh;display:flex;flex-direction:column}
+.modal.larga{max-width:880px}
+.conf-pos{font-weight:700;font-size:14px;margin:14px 0 4px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.conf-pos:first-of-type{margin-top:4px}
+.conf-l{display:grid;grid-template-columns:78px 120px 14px minmax(110px,1fr) 150px;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;border:1px solid transparent}
+.conf-l .tp{font-size:12px;font-weight:700;color:var(--ink2);text-transform:uppercase}
+.conf-l .atual{font:13px var(--mono);color:var(--ink2);overflow-wrap:anywhere}
+.conf-l input,.conf-l select{margin:0;min-width:0}
+.conf-l input{font-family:var(--mono)}
+.conf-l.mudou{background:#fef9c3;border-color:#fde047}
+.conf-l.ruim{background:#fef2f2;border-color:#fca5a5}
+.conf-l .msg{grid-column:1/-1;font-size:12px;color:#991b1b}
+.conf-resumo{margin-top:14px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;font-size:13px}
+.conf-resumo li{font-family:var(--mono);font-size:12.5px}
+@media (max-width:640px){.conf-l{grid-template-columns:70px 1fr}.conf-l .seta{display:none}.conf-l input,.conf-l select{grid-column:1/-1}}
 .modal .mc{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center}
 .modal .mc h3{margin:0;font-size:17px;flex:1}
 .modal .mb{padding:16px 18px;overflow:auto;flex:1}
@@ -241,7 +255,7 @@ table.t th{font-size:12px;color:var(--ink2);text-transform:uppercase}
    ===================================================================== */
 const SUPABASE_URL = 'https://fbeacviripkyieonzdyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_SHNlvhnVf0XT0ioIYw8FpQ_DS8F8ZXt';
-const VERSAO = 'v1.1 · Relatório por ocorrência e peças com problema';
+const VERSAO = 'v1.2 · Conferência em campo (correção de SNs em lote)';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -281,7 +295,7 @@ const nomeUsuario = id => S.ref.perfis.find(p => p.user_id === id)?.nome || (id 
 function msgErro(e) {
   const m = (e && (e.message || e.error_description || e.msg)) || String(e);
   if (/modelos_fabricante_id_tipo_codigo_nome_key/.test(m)) return 'Esse modelo já está cadastrado para esse tipo e fabricante.';
-  if (/ux_equipamentos_sn/.test(m)) return 'Já existe uma peça deste tipo e fabricante com este SN.\nConfira a placa. Se for a mesma peça, procure-a pela Busca.';
+  if (/ux_equipamentos_sn/.test(m)) return 'Já existe uma peça deste tipo e fabricante com este SN.\nConfira a placa. Se for a mesma peça, procure-a pela Busca.\nSe os SNs estão TROCADOS entre peças, use "✓ Conferir com a folha" na tela do filtro: ele corrige todas de uma vez.';
   if (/Invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
   if (/row-level security|permission denied/i.test(m)) return 'Você não tem permissão para esta operação.';
   if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sem conexão com o servidor. Verifique a internet e tente de novo.';
@@ -470,16 +484,15 @@ async function telaFiltro(g, n) {
   const nums = [...new Set(pos.filter(p => p.galeria === g).map(p => p.filtro_numero))].sort((a,b) => a - b);
   const i = nums.indexOf(Number(n));
   const ant = nums[i - 1], prox = nums[i + 1];
-  const grupo = nivel => pf.filter(p => (p.nivel || 'INFERIOR') === nivel);
-  const bloco = (nivel, rot) => grupo(nivel).length ? `<div class="nivel">${rot}</div><div class="posicoes">${grupo(nivel).map(cardPosicao).join('')}</div>` : '';
   return moldura('filtros', `
     <div class="trilha"><a href="#/">Painel</a> › <a href="#/g/${esc(g)}">Galeria ${esc(g)}</a> › ${esc(pf[0].filtro)}</div>
     <div class="linha"><h1>Galeria ${esc(g)} · ${esc(pf[0].filtro)}</h1><span class="esp"></span>
+      ${pode() ? `<button class="bt peq" data-conferir="${esc(g)}|${esc(n)}" title="Corrigir os SNs do filtro de uma vez, conferindo com a folha de campo">✓ Conferir com a folha</button>` : ''}
       ${ant ? `<a class="bt peq" href="#/f/${esc(g)}/${ant}">‹ ${esc(g)}${String(ant).padStart(2,'0')}</a>` : ''}
       ${prox ? `<a class="bt peq" href="#/f/${esc(g)}/${prox}">${esc(g)}${String(prox).padStart(2,'0')} ›</a>` : ''}</div>
     <div class="sub">${rf.inst} de ${rf.prev} peças instaladas (${rf.pct}%)${rf.semSn ? ` · <span class="tg warn">${rf.semSn} sem SN</span>` : ''}</div>
     ${barra(rf.pct)}
-    ${bloco('INFERIOR', 'Galeria inferior')}${bloco('SUPERIOR', 'Galeria superior')}`);
+    <div class="posicoes" style="margin-top:14px">${pf.slice().sort((a,b) => (a.item ?? 99) - (b.item ?? 99)).map(cardPosicao).join('')}</div>`);
 }
 
 function cardPosicao(p) {
@@ -499,7 +512,7 @@ function cardPosicao(p) {
   return `<div class="pos ${cls}">
     <div class="cab"><span class="item">${esc(p.item ?? '•')}</span>
       <div style="flex:1;min-width:0"><div class="nome">${esc(p.descricao)}</div>
-      <div class="loc">${esc(p.tag_local)}${p.tag_consorcio ? ' · CEDAE: ' + esc(p.tag_consorcio) : ''}</div></div>
+      <div class="loc">${esc(p.tag_local)}${p.tag_consorcio ? ' · CEDAE: ' + esc(p.tag_consorcio) : ''}${p.nivel === 'SUPERIOR' ? ' · <b style="color:#1e40af">galeria superior</b>' : ''}</div></div>
       ${p.ocorrencias_abertas > 0 ? `<span class="tg bad">${p.ocorrencias_abertas} ocorr.</span>` : ''}</div>
     ${pecas}
     <div class="rod">
@@ -507,6 +520,85 @@ function cardPosicao(p) {
       <span class="esp"></span>
       ${pode() && p.tipos_pendentes.length ? `<button class="bt pri peq" data-registrar="${p.posicao_id}">+ Registrar peças</button>` : ''}
     </div></div>`;
+}
+
+/* ---------- conferência em campo: corrige vários SNs de uma vez ---------- */
+const SIT_CURTA = { SEM_PLACA:'Sem placa', ILEGIVEL:'Placa ilegível', PENDENTE:'A conferir' };
+async function abrirConferencia(g, n) {
+  const pos = await carregarPosicoes(true); const eq = await carregarEquip(true);
+  const pf = pos.filter(p => p.galeria === g && p.filtro_numero === Number(n)).sort((a,b) => (a.item ?? 99) - (b.item ?? 99));
+  const linhas = [];
+  for (const p of pf) for (const t of TIPOS_ORDEM) {
+    const id = p[t.toLowerCase() + '_id']; const e = id && eq.find(x => x.id === id);
+    if (e) linhas.push({ p, t, e, tp: S.ref.tipos.find(x => x.codigo === t) });
+  }
+  if (!linhas.length) return toast('Nenhuma peça instalada neste filtro.');
+  const atualTxt = e => e.numero_serie || SIT_CURTA[e.situacao_sn] || 'pendente';
+  let html = '', ultima = null;
+  linhas.forEach((l, i) => {
+    if (l.p !== ultima) { ultima = l.p; html += `<div class="conf-pos"><span>${esc(l.p.item ?? '•')} · ${esc(l.p.descricao)}</span><span class="loc mono" style="font-weight:400;font-size:12px;color:var(--ink2)">${esc(l.p.tag_local)}</span></div>`; }
+    const sit = l.e.numero_serie ? '' : (l.e.situacao_sn || 'PENDENTE');
+    html += `<div class="conf-l" data-i="${i}">
+      <span class="tp" title="${esc(l.e.tag_rastreio)}">${esc(l.tp?.nome || l.t)}</span>
+      <span class="atual" title="Valor atual no app (${esc(l.e.tag_rastreio)})">${esc(atualTxt(l.e))}</span>
+      <span class="seta">→</span>
+      <input data-sn value="${esc(l.e.numero_serie || '')}" ${sit ? 'disabled' : ''} autocomplete="off" aria-label="SN na folha" placeholder="SN da folha" ${l.tp?.formato_sn === '^[0-9]{5}$' ? 'inputmode="numeric" maxlength="5"' : ''}>
+      <select data-sit aria-label="Situação"><option value="">SN da placa</option>${Object.entries(SIT_CURTA).map(([k,v]) => `<option value="${k}" ${k === sit ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      <span class="msg hide"></span></div>`;
+  });
+  const corpo = `
+    <div class="info"><b>Como usar:</b> com a folha de campo na mão, confira linha por linha. À esquerda está o que o app tem hoje; à direita, digite o SN que está na folha (ou escolha "Sem placa" / "A conferir"). O que mudar fica <b style="background:#fef9c3">amarelo</b>.<br>
+    Ao salvar, <b>tudo é gravado junto</b>: SNs trocados entre peças se resolvem sozinhos. Se algo estiver errado, nada é gravado.</div>
+    <div data-erro></div>
+    <div class="campo"><label>Referência da conferência (vai para o histórico de cada peça corrigida)</label>
+      <input name="ref" required maxlength="200" value="Conferência em campo ${esc(new Date().toLocaleDateString('pt-BR'))} — folha ${esc(pf[0].filtro)}"></div>
+    ${html}
+    <div class="conf-resumo" data-resumo></div>`;
+  const ler = form => linhas.map((l, i) => {
+    const row = form.querySelector(`.conf-l[data-i="${i}"]`);
+    const sit = row.querySelector('[data-sit]').value;
+    const sn = sit ? '' : row.querySelector('[data-sn]').value.replace(/\s+/g, '').toUpperCase();
+    const mudou = sit ? (!!l.e.numero_serie || sit !== l.e.situacao_sn) : sn !== (l.e.numero_serie || '');
+    return { l, row, sit, sn, mudou };
+  });
+  const validar = form => {
+    const v = ler(form); const erros = [];
+    const finais = {};
+    v.forEach(x => { const sn = x.sit ? null : (x.sn || x.l.e.numero_serie || null); if (sn) (finais[x.l.t + '|' + sn] ||= []).push(x); });
+    v.forEach(x => {
+      let msg = '';
+      if (x.mudou && !x.sit && !x.sn) msg = 'Digite o SN da folha ou escolha a situação (ex.: "A conferir").';
+      else if (x.mudou && x.sn && x.l.tp?.formato_sn && !(new RegExp(x.l.tp.formato_sn)).test(x.sn)) msg = `Formato inválido: ${x.l.tp.formato_sn_descricao || x.l.tp.formato_sn}.`;
+      else if (!x.sit && x.sn && finais[x.l.t + '|' + x.sn]?.length > 1) msg = `O SN ${x.sn} ficou em duas peças: ${finais[x.l.t + '|' + x.sn].map(y => `${y.l.p.item} · ${y.l.p.descricao}`).join(' e ')}.`;
+      x.row.classList.toggle('mudou', x.mudou && !msg); x.row.classList.toggle('ruim', !!msg);
+      const m = x.row.querySelector('.msg'); m.textContent = msg; m.classList.toggle('hide', !msg);
+      if (msg) erros.push(msg);
+    });
+    const mud = v.filter(x => x.mudou);
+    form.querySelector('[data-resumo]').innerHTML = mud.length
+      ? `<b>${mud.length} correção(ões) a gravar:</b><ul style="margin:6px 0 0;padding-left:18px">${mud.map(x => `<li>${esc(x.l.p.tag_local)} · ${esc(x.l.tp?.nome || x.l.t)} (${esc(x.l.e.tag_rastreio)}): ${esc(atualTxt(x.l.e))} → ${esc(x.sit ? SIT_CURTA[x.sit] : x.sn)}</li>`).join('')}</ul>`
+      : '<span class="sub">Nenhuma diferença até agora. Se tudo bate com a folha, é só fechar.</span>';
+    return { mud, erros };
+  };
+  modal(`Conferir ${pf[0].filtro} com a folha`, corpo, 'Gravar correções', async (form, erro) => {
+    const { mud, erros } = validar(form);
+    if (erros.length) return erro('Há linhas em vermelho. Corrija antes de gravar.');
+    if (!mud.length) return erro('Nenhuma diferença para gravar.');
+    const itens = mud.map(x => x.sit ? { equipamento_id: x.l.e.id, situacao_sn: x.sit } : { equipamento_id: x.l.e.id, numero_serie: x.sn });
+    const nGrav = await q(sb.rpc('corrigir_sn_lote', { p_itens: itens, p_motivo: new FormData(form).get('ref').trim() }));
+    invalidar(); toast(`${nGrav} correção(ões) gravada(s) no ${pf[0].filtro}.`); return true;
+  }, form => {
+    form.classList.add('larga');
+    form.addEventListener('input', () => validar(form));
+    form.addEventListener('change', ev => {
+      if (ev.target.matches('[data-sit]')) {
+        const inp = ev.target.closest('.conf-l').querySelector('[data-sn]');
+        inp.disabled = !!ev.target.value; if (ev.target.value) inp.value = ''; else inp.focus();
+      }
+      validar(form);
+    });
+    validar(form);
+  });
 }
 
 /* ---------- registrar peças de uma posição ---------- */
@@ -1484,7 +1576,7 @@ async function rotear() {
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao],[data-nome],[data-oc-foto],[data-oc-encerrar],[data-oc-data],[data-backup],[data-novo-tipo],[data-novo-modelo]');
+  const t = ev.target.closest('[data-ir],[data-registrar],[data-acao],[data-chip],[data-receber],[data-senha],[data-sair],[data-pdf],[data-csv],[data-assin-padrao],[data-nome],[data-oc-foto],[data-oc-encerrar],[data-oc-data],[data-backup],[data-novo-tipo],[data-novo-modelo],[data-conferir]');
   if (!t) return;
   if ('pdf' in t.dataset) return window.print();
   if (t.dataset.ocFoto) { ev.preventDefault(); return abrirAnexar(equipAtual, t.dataset.ocFoto); }
@@ -1493,6 +1585,7 @@ document.addEventListener('click', async ev => {
   if ('backup' in t.dataset) return baixarBackup(t);
   if ('novoTipo' in t.dataset) return novoTipoOcorrencia();
   if ('novoModelo' in t.dataset) return novoModelo();
+  if (t.dataset.conferir) { const [cg, cn] = t.dataset.conferir.split('|'); return abrirConferencia(cg, cn); }
   if ('nome' in t.dataset) return modal('Alterar meu nome', `<div data-erro></div>
       <div class="info">É o nome que aparece nos relatórios, nas instalações e no histórico de alterações.</div>
       <div class="campo"><label>Nome</label><input name="nome" value="${esc(S.perfil.nome)}" maxlength="80" required placeholder="Ex.: Eduardo Fernandes"></div>`,
